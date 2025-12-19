@@ -1,0 +1,164 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2024-01-01T00:00:00Z",
+  "providers": [
+    {
+      "provider_id": "openai",
+      "display_name": "OpenAI",
+      "enabled": true,
+      "base_url": "https://api.openai.com/v1",
+      "auth_type": "bearer",
+      "env_key_name": "OPENAI_API_KEY",
+      "models": [
+        {
+          "id": "gpt-4o",
+          "name": "GPT-4o",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        },
+        {
+          "id": "gpt-4o-mini",
+          "name": "GPT-4o Mini",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        },
+        {
+          "id": "gpt-4-turbo",
+          "name": "GPT-4 Turbo",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "anthropic",
+      "display_name": "Anthropic",
+      "enabled": true,
+      "base_url": "https://api.anthropic.com/v1",
+      "auth_type": "api-key",
+      "env_key_name": "ANTHROPIC_API_KEY",
+      "models": [
+        {
+          "id": "claude-sonnet-4-20250514",
+          "name": "Claude Sonnet 4",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        },
+        {
+          "id": "claude-3-5-sonnet-20241022",
+          "name": "Claude 3.5 Sonnet",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        },
+        {
+          "id": "claude-3-opus-20240229",
+          "name": "Claude 3 Opus",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "google",
+      "display_name": "Google",
+      "enabled": true,
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "auth_type": "api-key",
+      "env_key_name": "GOOGLE_API_KEY",
+      "models": [
+        {
+          "id": "gemini-2.0-flash",
+          "name": "Gemini 2.0 Flash",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        },
+        {
+          "id": "gemini-1.5-pro",
+          "name": "Gemini 1.5 Pro",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "grok",
+      "display_name": "Grok (xAI)",
+      "enabled": true,
+      "base_url": "https://api.x.ai/v1",
+      "auth_type": "bearer",
+      "env_key_name": "XAI_API_KEY",
+      "models": [
+        {
+          "id": "grok-2",
+          "name": "Grok 2",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        },
+        {
+          "id": "grok-2-mini",
+          "name": "Grok 2 Mini",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "deepseek",
+      "display_name": "DeepSeek",
+      "enabled": true,
+      "base_url": "https://api.deepseek.com/v1",
+      "auth_type": "bearer",
+      "env_key_name": "DEEPSEEK_API_KEY",
+      "models": [
+        {
+          "id": "deepseek-chat",
+          "name": "DeepSeek Chat",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        },
+        {
+          "id": "deepseek-reasoner",
+          "name": "DeepSeek Reasoner",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+          }
+        }
+      ]
+    }
+  ]
+}
