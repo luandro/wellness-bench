@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Circle } from 'lucide-react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Accordion,
@@ -7,16 +7,20 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { ProviderLogo } from '@/components/ui/provider-logo';
+import { BiasIndicatorTooltip, ScoreTooltip } from '@/components/ui/bias-toggle';
+import { useBenchmark } from '@/contexts/BenchmarkContext';
 
 interface BiasProfile {
   id: string;
   label: string;
-  level: 0 | 1 | 2; // 0 = empty, 1 = half, 2 = filled
+  level: 0 | 1 | 2;
 }
 
 interface ModelData {
-  id: string;
+  id: 'openai' | 'anthropic' | 'google' | 'grok' | 'deepseek';
   name: string;
+  modelVersion: string;
   summary: string;
   biasProfile: BiasProfile[];
   buenVivirAlignment: {
@@ -34,6 +38,7 @@ const models: ModelData[] = [
   {
     id: 'openai',
     name: 'OpenAI',
+    modelVersion: 'GPT-4o',
     summary: 'This model emphasizes technological solutions and market mechanisms, while acknowledging systemic challenges. It tends to frame responsibility broadly across stakeholders rather than naming specific power structures.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 2 },
@@ -52,7 +57,8 @@ const models: ModelData[] = [
   },
   {
     id: 'anthropic',
-    name: 'Anthropic',
+    name: 'Claude',
+    modelVersion: 'Claude 3.5 Sonnet',
     summary: 'This model shows stronger awareness of systemic issues and power dynamics. It questions growth assumptions more directly and names specific mechanisms that perpetuate harm.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 1 },
@@ -71,7 +77,8 @@ const models: ModelData[] = [
   },
   {
     id: 'google',
-    name: 'Google',
+    name: 'Gemini',
+    modelVersion: 'Gemini Pro 1.5',
     summary: 'This model provides comprehensive analysis but tends toward optimism about technological solutions. It balances acknowledgment of systemic issues with confidence in innovation.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 1 },
@@ -88,6 +95,7 @@ const models: ModelData[] = [
   {
     id: 'grok',
     name: 'Grok',
+    modelVersion: 'Grok-2',
     summary: 'This model takes a more provocative stance, questioning assumptions on multiple sides. It shows willingness to name uncomfortable truths but sometimes lacks constructive alternatives.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 1 },
@@ -103,6 +111,7 @@ const models: ModelData[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
+    modelVersion: 'DeepSeek-V3',
     summary: 'This model provides detailed structural analysis with attention to global inequities and historical patterns. It tends to emphasize collective over individual responsibility.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 1 },
@@ -117,38 +126,47 @@ const models: ModelData[] = [
   },
 ];
 
-const ScoreDots = ({ score, max = 5 }: { score: number; max?: number }) => (
-  <div className="flex items-center gap-1">
-    {Array.from({ length: max }).map((_, i) => (
-      <div
-        key={i}
-        className={cn(
-          'score-dot',
-          i < score ? 'filled' : 'empty'
-        )}
-      />
-    ))}
-    <span className="text-xs text-muted-foreground ml-2">{score}/{max}</span>
-  </div>
+const ScoreDots = ({ score, max = 5, label }: { score: number; max?: number; label: string }) => (
+  <ScoreTooltip
+    score={score}
+    label={label}
+    description={score >= 4 ? 'Strong alignment with principles' : score >= 2 ? 'Partial alignment' : 'Limited alignment'}
+  >
+    <div className="flex items-center gap-1">
+      {Array.from({ length: max }).map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            'score-dot',
+            i < score ? 'filled' : 'empty'
+          )}
+        />
+      ))}
+      <span className="text-xs text-muted-foreground ml-2">{score}/{max}</span>
+    </div>
+  </ScoreTooltip>
 );
 
-const BiasIndicator = ({ level }: { level: 0 | 1 | 2 }) => (
-  <div className="flex items-center gap-0.5">
-    {[0, 1].map((i) => (
-      <Circle
-        key={i}
-        className={cn(
-          'w-2.5 h-2.5',
-          i < level ? 'fill-accent text-accent' : 'text-muted-foreground/30'
-        )}
-      />
-    ))}
-  </div>
+const BiasIndicator = ({ level, label }: { level: 0 | 1 | 2; label: string }) => (
+  <BiasIndicatorTooltip biasType={label} level={level}>
+    <div className="flex items-center gap-0.5">
+      {[0, 1].map((i) => (
+        <Circle
+          key={i}
+          className={cn(
+            'w-2.5 h-2.5 transition-all duration-300',
+            i < level ? 'fill-accent text-accent' : 'text-muted-foreground/30'
+          )}
+        />
+      ))}
+    </div>
+  </BiasIndicatorTooltip>
 );
 
 export const ModelDeepDiveSection = () => {
-  const [activeModel, setActiveModel] = useState('openai');
+  const [activeModel, setActiveModel] = useState<ModelData['id']>('openai');
   const sectionRef = useRef<HTMLElement>(null);
+  const { biasFilters } = useBenchmark();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -170,6 +188,12 @@ export const ModelDeepDiveSection = () => {
 
   const currentModel = models.find((m) => m.id === activeModel)!;
 
+  // Check if any bias for current model matches active filters
+  const highlightedBiases = currentModel.biasProfile.filter(bias => {
+    const key = bias.id as keyof typeof biasFilters;
+    return biasFilters[key] && bias.level > 0;
+  });
+
   return (
     <section 
       ref={sectionRef} 
@@ -187,27 +211,44 @@ export const ModelDeepDiveSection = () => {
           </p>
         </div>
 
-        {/* Model tabs */}
+        {/* Model tabs with logos */}
         <div className="animate-on-scroll flex flex-wrap justify-center gap-2 mb-12">
           {models.map((model) => (
             <button
               key={model.id}
               onClick={() => setActiveModel(model.id)}
               className={cn(
-                'model-tab',
-                activeModel === model.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                'flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300',
+                activeModel === model.id 
+                  ? 'bg-card shadow-md border border-border/60 text-foreground' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent'
               )}
             >
-              {model.name}
+              <ProviderLogo provider={model.id} size="sm" />
+              <span className="text-sm font-medium">{model.name}</span>
             </button>
           ))}
         </div>
 
-        {/* Model content */}
-        <div className="animate-on-scroll bg-card rounded-2xl border border-border/40 p-8 shadow-sm">
+        {/* Model content with fade transition */}
+        <div 
+          key={activeModel}
+          className="animate-on-scroll visible bg-card rounded-2xl border border-border/40 p-8 shadow-sm animate-fade-in"
+        >
+          {/* Header with logo */}
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-border/30">
+            <ProviderLogo provider={currentModel.id} size="lg" />
+            <div>
+              <h3 className="text-lg font-serif font-medium text-foreground">
+                {currentModel.name}
+              </h3>
+              <span className="text-xs text-muted-foreground">{currentModel.modelVersion}</span>
+            </div>
+          </div>
+
           {/* Summary */}
           <div className="mb-8">
-            <h3 className="text-lg font-serif font-medium text-foreground mb-3">Summary</h3>
+            <h4 className="text-sm font-medium text-foreground mb-3">Summary</h4>
             <p className="text-muted-foreground leading-relaxed">
               {currentModel.summary}
             </p>
@@ -215,29 +256,38 @@ export const ModelDeepDiveSection = () => {
 
           {/* Bias profile */}
           <div className="mb-8">
-            <h3 className="text-lg font-serif font-medium text-foreground mb-4">Bias Profile</h3>
+            <h4 className="text-sm font-medium text-foreground mb-4">Bias Profile</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {currentModel.biasProfile.map((bias) => (
-                <div key={bias.id} className="flex flex-col gap-1.5">
-                  <span className="text-xs text-muted-foreground">{bias.label}</span>
-                  <BiasIndicator level={bias.level} />
-                </div>
-              ))}
+              {currentModel.biasProfile.map((bias) => {
+                const isHighlighted = biasFilters[bias.id as keyof typeof biasFilters];
+                return (
+                  <div 
+                    key={bias.id} 
+                    className={cn(
+                      'flex flex-col gap-1.5 p-2 rounded-lg transition-all duration-300',
+                      isHighlighted && bias.level > 0 && 'bg-accent/10 ring-1 ring-accent/30'
+                    )}
+                  >
+                    <span className="text-xs text-muted-foreground">{bias.label}</span>
+                    <BiasIndicator level={bias.level} label={bias.label} />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Buen Vivir alignment */}
           <div className="mb-8 p-4 rounded-xl bg-secondary/30 border border-border/30">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-foreground">Buen Vivir Alignment</h3>
-              <ScoreDots score={currentModel.buenVivirAlignment.score} />
+              <h4 className="text-sm font-medium text-foreground">Buen Vivir Alignment</h4>
+              <ScoreDots score={currentModel.buenVivirAlignment.score} label="Buen Vivir Alignment" />
             </div>
             <p className="text-sm text-muted-foreground">
               {currentModel.buenVivirAlignment.assessment}
             </p>
           </div>
 
-          {/* Expandable sections */}
+          {/* Expandable sections - lazy loaded */}
           <Accordion type="single" collapsible className="space-y-2">
             {currentModel.fullAnswer && (
               <AccordionItem value="full-answer" className="border-border/40">
