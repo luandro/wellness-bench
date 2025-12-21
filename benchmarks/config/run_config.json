@@ -1,0 +1,35 @@
+{
+  "$schema": "../schemas/run_config.schema.json",
+  "run_name": "Default Benchmark Run",
+  "run_description": "Standard benchmark run with all enabled questions and models",
+  "default_language": "en",
+  "enabled_languages": ["en", "pt-BR"],
+  "question_selection": {
+    "include_disabled": false
+  },
+  "provider_selection": {
+    "include_disabled": false
+  },
+  "generation_params": {
+    "temperature": 0.7,
+    "max_tokens": 4096
+  },
+  "evaluation_params": {
+    "temperature": 0.3,
+    "max_tokens": 2000
+  },
+  "synthesis": {
+    "enabled": true
+  },
+  "translation": {
+    "enabled": true,
+    "temperature": 0.1
+  },
+  "concurrency": {
+    "max_concurrent_requests": 3,
+    "per_provider_limit": 2,
+    "retry_attempts": 3,
+    "retry_delay_ms": 1000
+  },
+  "output_dir": "benchmarks/results"
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://wellness-bench.github.io/schemas/runs.schema.json",
+  "title": "Runs Catalog",
+  "description": "Top-level catalog of all benchmark runs",
+  "type": "object",
+  "required": ["version", "updated_at", "runs"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp"
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["run_id", "run_name", "created_at", "status", "path"],
+        "properties": {
+          "run_id": { "type": "string" },
+          "run_name": { "type": "string" },
+          "run_description": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "completed_at": { "type": "string", "format": "date-time" },
+          "status": {
+            "type": "string",
+            "enum": ["completed", "failed", "partial"]
+          },
+          "git_sha": { "type": "string" },
+          "languages": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "question_count": { "type": "integer" },
+          "model_count": { "type": "integer" },
+          "path": {
+            "type": "string",
+            "description": "Relative path to run directory"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
