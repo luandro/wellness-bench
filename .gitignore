@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# GitHub workflows (requires manual merge due to permissions)
+# The workflow file is available locally at .github/workflows/run-benchmark.yml
+.github/
