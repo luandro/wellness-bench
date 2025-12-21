@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,14 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { ProviderBadge } from '@/components/ui/provider-badge';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Play, Square, RotateCcw, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react';
+import { Play, Square, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Run, RunItem, RunItemStatus } from '@/types/benchmark';
+import type { Run, RunItem, RunItemStatus, EvaluationResult } from '@/types/benchmark';
 
 export default function RunPage() {
   const { questions, providers, evalPrompts, addRun, updateRun, runs, storedKeys, hasEnvKeys } = useApp();
@@ -30,6 +29,7 @@ export default function RunPage() {
   );
   const [isRunning, setIsRunning] = useState(false);
   const [currentRun, setCurrentRun] = useState<Run | null>(null);
+  const runItemsRef = useRef<RunItem[]>([]); // Track current items state for updates
 
   const enabledQuestions = questions.questions.filter(q => q.enabled);
   const enabledProviders = providers.providers.filter(p => p.enabled);
@@ -117,6 +117,7 @@ export default function RunPage() {
 
     addRun(run);
     setCurrentRun(run);
+    runItemsRef.current = [...items]; // Initialize ref with items
     setIsRunning(true);
 
     // Simulate running (in real implementation, this would call actual APIs)
@@ -128,21 +129,22 @@ export default function RunPage() {
     // Simulate progress (demo only)
     for (let i = 0; i < items.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const updatedItems = [...run.items];
-      updatedItems[i] = {
-        ...updatedItems[i],
+
+      // Use ref to get current state and update it
+      runItemsRef.current[i] = {
+        ...runItemsRef.current[i],
         status: 'succeeded' as RunItemStatus,
-        result: createMockResult(updatedItems[i]),
+        result: createMockResult(runItemsRef.current[i]),
       };
-      
-      const updatedRun = { ...run, items: updatedItems };
+
+      const updatedRun = { ...run, items: [...runItemsRef.current] };
       setCurrentRun(updatedRun);
     }
 
-    const completedRun = {
+    const completedRun: Run = {
       ...run,
-      status: 'completed' as const,
+      items: runItemsRef.current,
+      status: 'completed',
       completed_at: new Date().toISOString(),
     };
     updateRun(completedRun);
@@ -376,7 +378,7 @@ export default function RunPage() {
 }
 
 // Mock result generator for demo purposes
-function createMockResult(item: RunItem): any {
+function createMockResult(item: RunItem): EvaluationResult {
   return {
     question_id: item.question_id,
     provider_id: item.provider_id,
