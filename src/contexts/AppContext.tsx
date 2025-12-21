@@ -18,7 +18,7 @@ interface StoredApiKey {
   provider_id: string;
   key_last4: string;
   encrypted_key: string;
-  version: 'v2'; // Marks keys encrypted with Web Crypto API
+  version?: 'v2'; // Optional for backward compatibility with legacy base64 keys
 }
 
 interface AppContextType {
