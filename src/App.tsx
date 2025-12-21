@@ -5,6 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider } from "@/contexts/AppContext";
 import Index from "./pages/Index";
+import BenchmarkPage from "./pages/BenchmarkPage";
+import EvaluationPage from "./pages/EvaluationPage";
+import ProvidersPage from "./pages/ProvidersPage";
+import RunPage from "./pages/RunPage";
+import ResultsPage from "./pages/ResultsPage";
+import ApiKeysPage from "./pages/ApiKeysPage";
+import ImportExportPage from "./pages/ImportExportPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -18,6 +25,13 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/benchmark" element={<BenchmarkPage />} />
+            <Route path="/evaluation" element={<EvaluationPage />} />
+            <Route path="/providers" element={<ProvidersPage />} />
+            <Route path="/run" element={<RunPage />} />
+            <Route path="/results" element={<ResultsPage />} />
+            <Route path="/api-keys" element={<ApiKeysPage />} />
+            <Route path="/import-export" element={<ImportExportPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
