@@ -18,6 +18,7 @@ export default function ApiKeysPage() {
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // This page should not be shown if env keys exist or in viewer mode
   if (hasEnvKeys || mode === 'viewer') {
@@ -43,7 +44,7 @@ export default function ApiKeysPage() {
     );
   }
 
-  const handleSaveKey = (providerId: string) => {
+  const handleSaveKey = async (providerId: string) => {
     if (!keyInput.trim()) {
       toast({
         title: "Invalid Key",
@@ -53,15 +54,26 @@ export default function ApiKeysPage() {
       return;
     }
 
-    setApiKey(providerId, keyInput);
-    setEditingProvider(null);
-    setKeyInput('');
-    setShowKey(false);
+    setIsSaving(true);
+    try {
+      await setApiKey(providerId, keyInput);
+      setEditingProvider(null);
+      setKeyInput('');
+      setShowKey(false);
 
-    toast({
-      title: "API Key Saved",
-      description: "Key has been securely stored in browser storage.",
-    });
+      toast({
+        title: "API Key Saved",
+        description: "Key has been encrypted and stored in browser storage.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error Saving Key",
+        description: "Failed to encrypt and save the API key.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleRemoveKey = (providerId: string) => {
@@ -148,21 +160,23 @@ export default function ApiKeysPage() {
                         </button>
                       </div>
                       <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           onClick={() => handleSaveKey(provider.provider_id)}
+                          disabled={isSaving}
                         >
                           <Check className="w-4 h-4 mr-1" />
-                          Save
+                          {isSaving ? 'Encrypting...' : 'Save'}
                         </Button>
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => {
                             setEditingProvider(null);
                             setKeyInput('');
                             setShowKey(false);
                           }}
+                          disabled={isSaving}
                         >
                           <X className="w-4 h-4 mr-1" />
                           Cancel

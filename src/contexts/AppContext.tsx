@@ -1,13 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { 
-  AppMode, 
-  QuestionsConfig, 
-  EvalPromptsConfig, 
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import type {
+  AppMode,
+  QuestionsConfig,
+  EvalPromptsConfig,
   ProvidersConfig,
   Run,
   ResultsBundle,
   SynthesisSummary
 } from '@/types/benchmark';
+import { encryptApiKey, decryptApiKey, isCryptoAvailable } from '@/lib/crypto';
 
 import questionsData from '@/data/questions.json';
 import evalPromptsData from '@/data/eval_prompts.json';
@@ -16,7 +17,8 @@ import providersData from '@/data/providers.json';
 interface StoredApiKey {
   provider_id: string;
   key_last4: string;
-  encrypted_key: string; // In practice, we'd use proper encryption
+  encrypted_key: string;
+  version: 'v2'; // Marks keys encrypted with Web Crypto API
 }
 
 interface AppContextType {
@@ -34,9 +36,9 @@ interface AppContextType {
   // API Keys (Builder mode only)
   hasEnvKeys: boolean;
   storedKeys: StoredApiKey[];
-  setApiKey: (providerId: string, key: string) => void;
+  setApiKey: (providerId: string, key: string) => Promise<void>;
   removeApiKey: (providerId: string) => void;
-  getApiKey: (providerId: string) => string | null;
+  getApiKey: (providerId: string) => Promise<string | null>;
   
   // Runs (Builder mode only)
   runs: Run[];
@@ -132,36 +134,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.PROVIDERS, JSON.stringify(updated));
   };
 
-  const setApiKey = (providerId: string, key: string) => {
+  const setApiKey = useCallback(async (providerId: string, key: string): Promise<void> => {
     const keyLast4 = key.slice(-4);
-    // In production, encrypt the key properly
+
+    let encryptedKey: string;
+    if (isCryptoAvailable()) {
+      encryptedKey = await encryptApiKey(key);
+    } else {
+      // Fallback for environments without Web Crypto API
+      console.warn('Web Crypto API not available, using fallback encoding');
+      encryptedKey = btoa(key);
+    }
+
     const newKey: StoredApiKey = {
       provider_id: providerId,
       key_last4: keyLast4,
-      encrypted_key: btoa(key), // Simple encoding for demo
+      encrypted_key: encryptedKey,
+      version: 'v2',
     };
-    
+
     const updated = [
       ...storedKeys.filter(k => k.provider_id !== providerId),
       newKey
     ];
     setStoredKeys(updated);
     localStorage.setItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated));
-  };
+  }, [storedKeys]);
 
-  const removeApiKey = (providerId: string) => {
+  const removeApiKey = useCallback((providerId: string) => {
     const updated = storedKeys.filter(k => k.provider_id !== providerId);
     setStoredKeys(updated);
     localStorage.setItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated));
-  };
+  }, [storedKeys]);
 
-  const getApiKey = (providerId: string): string | null => {
+  const getApiKey = useCallback(async (providerId: string): Promise<string | null> => {
     const stored = storedKeys.find(k => k.provider_id === providerId);
-    if (stored) {
-      return atob(stored.encrypted_key); // Decode for demo
+    if (!stored) {
+      return null;
     }
-    return null;
-  };
+
+    try {
+      if (stored.version === 'v2' && isCryptoAvailable()) {
+        return await decryptApiKey(stored.encrypted_key);
+      } else {
+        // Legacy fallback for old base64-encoded keys
+        return atob(stored.encrypted_key);
+      }
+    } catch (error) {
+      console.error('Failed to decrypt API key:', error);
+      return null;
+    }
+  }, [storedKeys]);
 
   const addRun = (run: Run) => {
     const updated = [...runs, run];
