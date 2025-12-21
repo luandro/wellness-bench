@@ -1,6 +1,6 @@
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProviderBadge } from '@/components/ui/provider-badge';
-import { ScoreBadge } from '@/components/ui/score-badge';
 import { useApp } from '@/contexts/AppContext';
 import { MessageSquare, Boxes, BarChart3, AlertTriangle } from 'lucide-react';
 
@@ -95,32 +95,40 @@ export function ResultsOverview() {
       </div>
 
       {/* Latest Run Summary */}
-      {latestRun && (
-        <Card className="card-elevated">
-          <CardHeader>
-            <CardTitle className="text-lg">Latest Run: {latestRun.name}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {new Date(latestRun.created_at).toLocaleDateString()} at{' '}
-              {new Date(latestRun.created_at).toLocaleTimeString()}
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {latestRun.items
-                .filter(item => item.status === 'succeeded')
-                .slice(0, 5)
-                .map((item) => (
-                  <ProviderBadge key={item.id} provider={item.provider_id} />
-                ))}
-              {latestRun.items.filter(i => i.status === 'succeeded').length > 5 && (
-                <span className="text-sm text-muted-foreground">
-                  +{latestRun.items.filter(i => i.status === 'succeeded').length - 5} more
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {latestRun && <LatestRunSummary run={latestRun} />}
     </div>
+  );
+}
+
+// Extracted component to avoid repeated filtering
+function LatestRunSummary({ run }: { run: { name: string; created_at: string; items: Array<{ id: string; status: string; provider_id: string }> } }) {
+  // Filter succeeded items once and memoize
+  const succeededItems = useMemo(
+    () => run.items.filter(item => item.status === 'succeeded'),
+    [run.items]
+  );
+
+  return (
+    <Card className="card-elevated">
+      <CardHeader>
+        <CardTitle className="text-lg">Latest Run: {run.name}</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          {new Date(run.created_at).toLocaleDateString()} at{' '}
+          {new Date(run.created_at).toLocaleTimeString()}
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap gap-2">
+          {succeededItems.slice(0, 5).map((item) => (
+            <ProviderBadge key={item.id} provider={item.provider_id} />
+          ))}
+          {succeededItems.length > 5 && (
+            <span className="text-sm text-muted-foreground">
+              +{succeededItems.length - 5} more
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,9 +7,8 @@ import { QuestionResults } from '@/components/results/QuestionResults';
 import { useApp } from '@/contexts/AppContext';
 
 export default function ResultsPage() {
-  const { questions, runs } = useApp();
+  const { questions } = useApp();
   const enabledQuestions = questions.questions.filter(q => q.enabled);
-  const hasResults = runs.some(r => r.status === 'completed');
 
   return (
     <MainLayout>

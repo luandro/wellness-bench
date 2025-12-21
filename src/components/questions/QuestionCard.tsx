@@ -1,8 +1,18 @@
-import { useState } from 'react';
 import { Edit2, Trash2, GripVertical, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import type { Question } from '@/types/benchmark';
 import { cn } from '@/lib/utils';
 
@@ -65,14 +75,34 @@ export function QuestionCard({ question, onEdit, onDelete, onToggle }: QuestionC
             >
               <Edit2 className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(question.id)}
-              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Question</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{question.title}"? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => onDelete(question.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </CardContent>

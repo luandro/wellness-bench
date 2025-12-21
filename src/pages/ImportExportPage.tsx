@@ -6,11 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Download, 
-  Upload, 
-  FileJson, 
-  FolderOpen, 
+import {
+  ConfigBundleSchema,
+  ResultsBundleSchema,
+  QuestionsConfigSchema,
+  EvalPromptsConfigSchema,
+  ProvidersConfigSchema,
+} from '@/lib/schemas';
+import { ZodError } from 'zod';
+import {
+  Download,
+  Upload,
+  FileJson,
+  FolderOpen,
   Package,
   BarChart3,
   Settings,
@@ -93,6 +101,18 @@ export default function ImportExportPage() {
     fileInputRef.current?.click();
   };
 
+  const formatZodError = (error: ZodError): string => {
+    const issues = error.issues.slice(0, 3);
+    const messages = issues.map(issue => {
+      const path = issue.path.join('.');
+      return path ? `${path}: ${issue.message}` : issue.message;
+    });
+    if (error.issues.length > 3) {
+      messages.push(`...and ${error.issues.length - 3} more issues`);
+    }
+    return messages.join('; ');
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -102,29 +122,48 @@ export default function ImportExportPage() {
       const data = JSON.parse(text);
 
       if (importType === 'config') {
-        if (data.questions) setQuestions(data.questions);
-        if (data.eval_prompts) setEvalPrompts(data.eval_prompts);
-        if (data.providers) setProviders(data.providers);
-        
+        // Validate config bundle structure
+        const validatedBundle = ConfigBundleSchema.parse(data);
+
+        // Validate and set each config section
+        if (validatedBundle.questions) {
+          const validatedQuestions = QuestionsConfigSchema.parse(validatedBundle.questions);
+          setQuestions(validatedQuestions);
+        }
+        if (validatedBundle.eval_prompts) {
+          const validatedEvalPrompts = EvalPromptsConfigSchema.parse(validatedBundle.eval_prompts);
+          setEvalPrompts(validatedEvalPrompts);
+        }
+        if (validatedBundle.providers) {
+          const validatedProviders = ProvidersConfigSchema.parse(validatedBundle.providers);
+          setProviders(validatedProviders);
+        }
+
         toast({
           title: "Config Imported",
-          description: "Configuration has been updated.",
+          description: "Configuration has been validated and updated.",
         });
       } else if (importType === 'results') {
-        if (data.catalog && data.runs) {
-          loadResultsBundle(data);
-          toast({
-            title: "Results Imported",
-            description: `Loaded ${data.runs.length} runs.`,
-          });
-        } else {
-          throw new Error("Invalid results bundle format");
-        }
+        // Validate results bundle
+        const validatedResults = ResultsBundleSchema.parse(data);
+        loadResultsBundle(validatedResults);
+        toast({
+          title: "Results Imported",
+          description: `Loaded ${validatedResults.runs.length} validated runs.`,
+        });
       }
     } catch (e) {
+      let errorMessage = "Failed to parse file";
+      if (e instanceof ZodError) {
+        errorMessage = `Validation failed: ${formatZodError(e)}`;
+      } else if (e instanceof SyntaxError) {
+        errorMessage = "Invalid JSON format";
+      } else if (e instanceof Error) {
+        errorMessage = e.message;
+      }
       toast({
         title: "Import Failed",
-        description: e instanceof Error ? e.message : "Failed to parse file",
+        description: errorMessage,
         variant: "destructive",
       });
     }

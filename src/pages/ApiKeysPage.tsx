@@ -6,10 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ProviderBadge } from '@/components/ui/provider-badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Key, Eye, EyeOff, Trash2, Plus, AlertTriangle, Check, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export default function ApiKeysPage() {
   const { providers, storedKeys, setApiKey, removeApiKey, hasEnvKeys, mode } = useApp();
@@ -18,6 +28,7 @@ export default function ApiKeysPage() {
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // This page should not be shown if env keys exist or in viewer mode
   if (hasEnvKeys || mode === 'viewer') {
@@ -43,7 +54,7 @@ export default function ApiKeysPage() {
     );
   }
 
-  const handleSaveKey = (providerId: string) => {
+  const handleSaveKey = async (providerId: string) => {
     if (!keyInput.trim()) {
       toast({
         title: "Invalid Key",
@@ -53,15 +64,26 @@ export default function ApiKeysPage() {
       return;
     }
 
-    setApiKey(providerId, keyInput);
-    setEditingProvider(null);
-    setKeyInput('');
-    setShowKey(false);
+    setIsSaving(true);
+    try {
+      await setApiKey(providerId, keyInput);
+      setEditingProvider(null);
+      setKeyInput('');
+      setShowKey(false);
 
-    toast({
-      title: "API Key Saved",
-      description: "Key has been securely stored in browser storage.",
-    });
+      toast({
+        title: "API Key Saved",
+        description: "Key has been encrypted and stored in browser storage.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error Saving Key",
+        description: "Failed to encrypt and save the API key.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleRemoveKey = (providerId: string) => {
@@ -148,21 +170,23 @@ export default function ApiKeysPage() {
                         </button>
                       </div>
                       <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           onClick={() => handleSaveKey(provider.provider_id)}
+                          disabled={isSaving}
                         >
                           <Check className="w-4 h-4 mr-1" />
-                          Save
+                          {isSaving ? 'Encrypting...' : 'Save'}
                         </Button>
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => {
                             setEditingProvider(null);
                             setKeyInput('');
                             setShowKey(false);
                           }}
+                          disabled={isSaving}
                         >
                           <X className="w-4 h-4 mr-1" />
                           Cancel
@@ -171,23 +195,44 @@ export default function ApiKeysPage() {
                     </div>
                   ) : storedKey ? (
                     <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
                         onClick={() => setEditingProvider(provider.provider_id)}
                       >
                         <Key className="w-4 h-4 mr-1" />
                         Update Key
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => handleRemoveKey(provider.provider_id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" />
-                        Remove
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Remove
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remove API Key</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to remove the API key for {provider.display_name}?
+                              You will need to re-enter it to run evaluations with this provider.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleRemoveKey(provider.provider_id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   ) : (
                     <Button 
