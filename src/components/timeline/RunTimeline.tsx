@@ -16,7 +16,7 @@ export function RunTimeline() {
       {/* Timeline container */}
       <div 
         ref={containerRef}
-        className="flex items-center justify-center gap-3 overflow-x-auto scrollbar-thin py-2"
+        className="flex items-center justify-center gap-3 overflow-x-auto py-2"
       >
         {visibleRuns.map((run, index) => {
           const isSelected = selectedRunId === run.id;

@@ -110,7 +110,7 @@ export default function EvaluationPage() {
                         </div>
                       </div>
                     ) : (
-                      <pre className="p-3 rounded-lg bg-muted/50 text-sm font-mono whitespace-pre-wrap overflow-x-auto max-h-40 scrollbar-thin">
+                      <pre className="p-3 rounded-lg bg-muted/50 text-sm font-mono whitespace-pre-wrap overflow-x-auto max-h-40">
                         {step.prompt_template}
                       </pre>
                     )}

@@ -28,7 +28,7 @@ export function JsonViewer({ data, className, defaultExpanded = true }: JsonView
       >
         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
       </Button>
-      <pre className="p-4 rounded-lg bg-muted/50 overflow-x-auto text-sm font-mono scrollbar-thin">
+      <pre className="p-4 rounded-lg bg-muted/50 overflow-x-auto text-sm font-mono">
         <JsonNode data={data} level={0} expanded={defaultExpanded} />
       </pre>
     </div>

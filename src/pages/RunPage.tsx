@@ -317,7 +317,7 @@ export default function RunPage() {
                   <CardTitle className="text-base">Progress</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
                     {currentRun.items.map((item) => {
                       const question = questions.questions.find(q => q.id === item.question_id);
                       return (
