@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/bun.lockb') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
@@ -137,8 +137,13 @@ jobs:
           echo "Running: $CMD"
           $CMD
 
-          # Extract run ID from latest run
-          RUN_ID=$(ls -t benchmarks/results | head -1)
+          if [ ! -d "benchmarks/results" ] || [ -z "$(ls -A benchmarks/results 2>/dev/null)" ]; then
+            echo "::error::No benchmark results found in benchmarks/results directory"
+            exit 1
+          fi
+
+          # Extract run ID from latest run directory
+          RUN_ID=$(ls -1dt benchmarks/results/*/ | head -1 | xargs basename)
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
           echo "Benchmark run ID: $RUN_ID"
         env:
@@ -173,7 +178,7 @@ jobs:
           RUN_ID="${{ steps.benchmark.outputs.run_id }}"
           RUN_NAME="${{ inputs.run_name || 'Benchmark Run' }}"
 
-          git commit -m "$(cat <<'EOF'
+          git commit -m "$(cat <<EOF
           Add benchmark results: $RUN_NAME
 
           Run ID: $RUN_ID
