@@ -26,6 +26,11 @@ interface PipelineContext {
   adapters: Map<string, ProviderAdapter>;
   evalPrompts: EvalPromptsConfig;
   concurrency: ConcurrencyConfig;
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  };
   onProgress?: (current: number, total: number, message: string) => void;
 }
 
@@ -43,7 +48,12 @@ async function generateAnswer(
   modelId: string,
   questionText: string,
   answerPrompt: string,
-  params: { temperature?: number; max_tokens?: number }
+  params: { temperature?: number; max_tokens?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
 ): Promise<GenerationResult> {
   const systemPrompt = answerPrompt.replace('{{question}}', questionText);
 
@@ -57,6 +67,7 @@ async function generateAnswer(
     messages,
     temperature: params.temperature ?? 0.7,
     max_tokens: params.max_tokens ?? 4096,
+    retry_options: retryOptions,
   });
 
   return {
@@ -74,7 +85,12 @@ async function runEvaluationStep<T>(
   modelId: string,
   promptTemplate: string,
   answer: string,
-  params: { temperature?: number; max_tokens?: number }
+  params: { temperature?: number; max_tokens?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
 ): Promise<{ result: T; latency_ms: number }> {
   const prompt = promptTemplate.replace('{{answer}}', answer);
 
@@ -87,6 +103,7 @@ async function runEvaluationStep<T>(
     messages,
     temperature: params.temperature ?? 0.3,
     max_tokens: params.max_tokens ?? 2000,
+    retry_options: retryOptions,
   });
 
   // Parse JSON response
@@ -106,6 +123,7 @@ async function runEvaluationStep<T>(
       messages: repairMessages,
       temperature: 0.1,
       max_tokens: params.max_tokens ?? 2000,
+      retry_options: retryOptions,
     });
 
     try {
@@ -130,7 +148,12 @@ async function runAllEvaluations(
   modelId: string,
   answer: string,
   evalPrompts: EvalPromptsConfig,
-  params: { temperature?: number; max_tokens?: number }
+  params: { temperature?: number; max_tokens?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
 ): Promise<{ outputs: EvaluationOutputs; latencies: Record<string, number> }> {
   const outputs: EvaluationOutputs = {
     step_a: null,
@@ -145,34 +168,36 @@ async function runAllEvaluations(
     try {
       if (step.id === 'step-a') {
         const { result, latency_ms } = await runEvaluationStep<StepAOutput>(
-          adapter, modelId, step.prompt_template, answer, params
+          adapter, modelId, step.prompt_template, answer, params, retryOptions
         );
         outputs.step_a = result;
         latencies.step_a = latency_ms;
       } else if (step.id === 'step-b') {
         const { result, latency_ms } = await runEvaluationStep<StepBOutput>(
-          adapter, modelId, step.prompt_template, answer, params
+          adapter, modelId, step.prompt_template, answer, params, retryOptions
         );
         outputs.step_b = result;
         latencies.step_b = latency_ms;
       } else if (step.id === 'step-c') {
         const { result, latency_ms } = await runEvaluationStep<StepCOutput>(
-          adapter, modelId, step.prompt_template, answer, params
+          adapter, modelId, step.prompt_template, answer, params, retryOptions
         );
         outputs.step_c = result;
         latencies.step_c = latency_ms;
       } else if (step.id === 'step-d') {
         const { result, latency_ms } = await runEvaluationStep<StepDOutput>(
-          adapter, modelId, step.prompt_template, answer, params
+          adapter, modelId, step.prompt_template, answer, params, retryOptions
         );
         outputs.step_d = result;
         latencies.step_d = latency_ms;
       } else if (step.id === 'step-e') {
         const { result, latency_ms } = await runEvaluationStep<StepEOutput>(
-          adapter, modelId, step.prompt_template, answer, params
+          adapter, modelId, step.prompt_template, answer, params, retryOptions
         );
         outputs.step_e = result;
         latencies.step_e = latency_ms;
+      } else {
+        console.warn(`Unknown evaluation step "${step.id}", skipping.`);
       }
     } catch (error) {
       console.error(`Failed evaluation step ${step.id}:`, error);
@@ -193,7 +218,12 @@ async function generateSynthesis(
   responses: Array<{ modelName: string; answer: string }>,
   synthesisPrompt: string,
   params: { temperature?: number; max_tokens?: number },
-  defaultLanguage: string
+  defaultLanguage: string,
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
 ): Promise<SynthesisResult> {
   // Format responses for the prompt
   const formattedResponses = responses
@@ -211,6 +241,7 @@ async function generateSynthesis(
     messages,
     temperature: params.temperature ?? 0.3,
     max_tokens: params.max_tokens ?? 2000,
+    retry_options: retryOptions,
   });
 
   const parsed = parseJsonResponse(response.content) as {
@@ -239,7 +270,12 @@ async function translateText(
   sourceLanguage: string,
   targetLanguage: string,
   translationTemplate: string,
-  params: { temperature?: number }
+  params: { temperature?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
 ): Promise<string> {
   const prompt = translationTemplate
     .replace('{{text}}', text)
@@ -255,6 +291,7 @@ async function translateText(
     messages,
     temperature: params.temperature ?? 0.1,
     max_tokens: 4096,
+    retry_options: retryOptions,
   });
 
   return response.content;
@@ -271,7 +308,7 @@ export async function runPipeline(
   syntheses: SynthesisResult[];
 }> {
   const items: PipelineItem[] = [];
-  const { adapters, evalPrompts, concurrency } = context;
+  const { adapters, evalPrompts, concurrency, retryOptions } = context;
   const evaluationParams = {
     temperature: plan.evaluation_params?.temperature ?? 0.3,
     max_tokens: plan.evaluation_params?.max_tokens ?? 2000,
@@ -302,6 +339,8 @@ export async function runPipeline(
           status: 'failed',
           error: `No adapter for provider: ${model.provider_id}`,
         });
+        completed++;
+        context.onProgress?.(completed, total, `Skipped ${completed}/${total}`);
         continue;
       }
 
@@ -326,7 +365,8 @@ export async function runPipeline(
               model.model_id,
               question.text,
               evalPrompts.answer_wrapper_prompt,
-              model.params
+              model.params,
+              retryOptions
             );
 
             item.raw_answer = genResult.content;
@@ -353,7 +393,8 @@ export async function runPipeline(
                 evaluatorModelId,
                 item.raw_answer,
                 evalPrompts,
-                evaluationParams
+                evaluationParams,
+                retryOptions
               );
             const evalResult = evaluatorProviderId === model.provider_id
               ? await runEvaluations()
@@ -414,7 +455,8 @@ export async function runPipeline(
           responses,
           evalPrompts.synthesis_prompt,
           { temperature: 0.3, max_tokens: 2000 },
-          plan.default_language
+          plan.default_language,
+          retryOptions
         );
 
         syntheses.push(synthesis);
@@ -438,7 +480,12 @@ export async function translateResults(
   translationTemplate: string,
   targetLanguages: string[],
   sourceLanguage: string = 'en',
-  temperature: number = 0.1
+  temperature: number = 0.1,
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
 ): Promise<{
   translatedSyntheses: SynthesisResult[];
 }> {
@@ -453,19 +500,46 @@ export async function translateResults(
         // Translate each array field
         const translatedCommonGround = await Promise.all(
           synthesis.common_ground.map((text) =>
-            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature })
+            translateText(
+              adapter,
+              modelId,
+              text,
+              sourceLanguage,
+              targetLang,
+              translationTemplate,
+              { temperature },
+              retryOptions
+            )
           )
         );
 
         const translatedDivergences = await Promise.all(
           synthesis.key_divergences.map((text) =>
-            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature })
+            translateText(
+              adapter,
+              modelId,
+              text,
+              sourceLanguage,
+              targetLang,
+              translationTemplate,
+              { temperature },
+              retryOptions
+            )
           )
         );
 
         const translatedPatterns = await Promise.all(
           synthesis.salient_bias_patterns.map((text) =>
-            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature })
+            translateText(
+              adapter,
+              modelId,
+              text,
+              sourceLanguage,
+              targetLang,
+              translationTemplate,
+              { temperature },
+              retryOptions
+            )
           )
         );
 

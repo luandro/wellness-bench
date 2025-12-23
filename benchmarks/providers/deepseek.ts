@@ -89,7 +89,7 @@ export class DeepSeekAdapter extends BaseProviderAdapter {
       }
 
       return res.json() as Promise<DeepSeekResponse>;
-    });
+    }, request.retry_options);
 
     const latencyMs = Date.now() - startTime;
 

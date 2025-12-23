@@ -213,6 +213,11 @@ export interface CompletionRequest {
   messages: ChatMessage[];
   temperature?: number;
   max_tokens?: number;
+  retry_options?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  };
   [key: string]: unknown;
 }
 

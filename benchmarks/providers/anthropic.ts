@@ -107,7 +107,7 @@ export class AnthropicAdapter extends BaseProviderAdapter {
       }
 
       return res.json() as Promise<AnthropicResponse>;
-    });
+    }, request.retry_options);
 
     const latencyMs = Date.now() - startTime;
 

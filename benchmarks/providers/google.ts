@@ -106,7 +106,7 @@ export class GoogleGeminiAdapter extends BaseProviderAdapter {
       }
 
       return res.json() as Promise<GeminiResponse>;
-    });
+    }, request.retry_options);
 
     const latencyMs = Date.now() - startTime;
 

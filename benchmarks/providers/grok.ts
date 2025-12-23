@@ -89,7 +89,7 @@ export class GrokAdapter extends BaseProviderAdapter {
       }
 
       return res.json() as Promise<GrokResponse>;
-    });
+    }, request.retry_options);
 
     const latencyMs = Date.now() - startTime;
 

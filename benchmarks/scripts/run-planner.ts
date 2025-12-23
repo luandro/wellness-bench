@@ -3,8 +3,8 @@
  * Resolves the execution plan from configuration
  */
 
-import { createHash } from 'crypto';
 import { execSync } from 'child_process';
+import { isAbsolute } from 'path';
 import type {
   RunConfig,
   QuestionsConfig,
@@ -145,6 +145,22 @@ export function createRunPlan(
   questionsConfig: QuestionsConfig,
   providersConfig: ProvidersConfig
 ): RunPlan {
+  if (!runConfig.enabled_languages.includes(runConfig.default_language)) {
+    throw new Error(
+      `default_language "${runConfig.default_language}" must be included in enabled_languages`
+    );
+  }
+
+  if (runConfig.output_dir) {
+    if (isAbsolute(runConfig.output_dir)) {
+      throw new Error(`output_dir must be a relative path, got "${runConfig.output_dir}"`);
+    }
+    const segments = runConfig.output_dir.split(/[\\/]+/);
+    if (segments.some((segment) => segment === '..')) {
+      throw new Error(`output_dir must not contain "..": "${runConfig.output_dir}"`);
+    }
+  }
+
   const runId = runConfig.run_id || generateRunId();
   const questions = resolveQuestions(questionsConfig, runConfig);
   const models = resolveModels(providersConfig, runConfig);

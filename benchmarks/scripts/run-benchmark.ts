@@ -28,6 +28,7 @@ import {
 import {
   createAvailableAdapters,
   validateProviderKeys,
+  getSupportedProviders,
 } from '../providers/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -122,9 +123,10 @@ function createProgressLogger(verbose: boolean) {
 
 async function main(): Promise<void> {
   const startTime = Date.now();
+  let options: CliOptions | undefined;
 
   try {
-    const options = parseCliArgs();
+    options = parseCliArgs();
 
     if (options.help) {
       printHelp();
@@ -151,7 +153,10 @@ async function main(): Promise<void> {
 
     // Apply CLI overrides to run config
     if (options.providers) {
-      const providerIds = options.providers.split(',').map((p) => p.trim());
+      const providerIds = options.providers
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean);
       configs.runConfig.provider_selection = {
         ...configs.runConfig.provider_selection,
         provider_ids: providerIds,
@@ -159,7 +164,10 @@ async function main(): Promise<void> {
     }
 
     if (options.questions) {
-      const questionIds = options.questions.split(',').map((q) => q.trim());
+      const questionIds = options.questions
+        .split(',')
+        .map((q) => q.trim())
+        .filter(Boolean);
       configs.runConfig.question_selection = {
         ...configs.runConfig.question_selection,
         question_ids: questionIds,
@@ -193,6 +201,20 @@ async function main(): Promise<void> {
       requiredProviderIds.add(plan.translation.provider);
     }
 
+    // Validate provider support
+    const supportedProviders = new Set(getSupportedProviders());
+    const unsupportedProviders = [...requiredProviderIds].filter(
+      (providerId) => !supportedProviders.has(providerId)
+    );
+    if (unsupportedProviders.length > 0) {
+      console.error('\nUnsupported providers in configuration:');
+      for (const providerId of unsupportedProviders) {
+        console.error(`  - ${providerId}`);
+      }
+      console.error('\nUpdate benchmarks/config/providers.json to remove unsupported providers.');
+      process.exit(1);
+    }
+
     // Validate API keys
     console.log('Validating API keys...');
     const { valid, missing } = validateProviderKeys(
@@ -221,10 +243,30 @@ async function main(): Promise<void> {
     console.log('\nRunning benchmark pipeline...\n');
     const progressLogger = createProgressLogger(options.verbose);
 
+    const retryOptions: {
+      maxRetries?: number;
+      baseDelayMs?: number;
+      maxDelayMs?: number;
+    } | undefined = (() => {
+      const retrySettings: {
+        maxRetries?: number;
+        baseDelayMs?: number;
+        maxDelayMs?: number;
+      } = {};
+      if (typeof configs.runConfig.concurrency?.retry_attempts === 'number') {
+        retrySettings.maxRetries = configs.runConfig.concurrency.retry_attempts;
+      }
+      if (typeof configs.runConfig.concurrency?.retry_delay_ms === 'number') {
+        retrySettings.baseDelayMs = configs.runConfig.concurrency.retry_delay_ms;
+      }
+      return Object.keys(retrySettings).length > 0 ? retrySettings : undefined;
+    })();
+
     const { items, syntheses } = await runPipeline(plan, {
       adapters,
       evalPrompts: configs.evalPrompts,
       concurrency: configs.runConfig.concurrency || {},
+      retryOptions,
       onProgress: progressLogger,
     });
 
@@ -262,7 +304,8 @@ async function main(): Promise<void> {
           configs.evalPrompts.translation_prompt_template,
           targetLanguages,
           configs.runConfig.default_language,
-          temperature
+          temperature,
+          retryOptions
         );
 
         allSyntheses = translatedSyntheses;

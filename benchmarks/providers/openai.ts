@@ -89,7 +89,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
       }
 
       return res.json() as Promise<OpenAIResponse>;
-    });
+    }, request.retry_options);
 
     const latencyMs = Date.now() - startTime;
 
