@@ -32,6 +32,15 @@ export const HeroSection = () => {
       <div className="organic-blob w-80 h-80 -bottom-40 -left-40" style={{ animationDelay: '2s' }} />
       
       <div className="section-container text-center relative z-10">
+        {/* Floating Logo - centered above title */}
+        <div className="flex justify-center mb-12 animate-on-scroll">
+          <img 
+            src="/wellnessai.svg" 
+            alt="Wellness Bench Logo" 
+            className="w-10 h-10 md:w-12 md:h-12 mix-blend-multiply opacity-80" 
+          />
+        </div>
+
         {/* Title */}
         <h1 className="animate-on-scroll text-display-sm md:text-display font-serif text-foreground mb-8">
           Wellness Bench
