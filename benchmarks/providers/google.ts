@@ -4,6 +4,7 @@
  */
 
 import { BaseProviderAdapter, withRetry } from './base.js';
+import { GOOGLE_API_BASE } from './constants.js';
 import type {
   CompletionRequest,
   CompletionResponse,
@@ -56,7 +57,7 @@ export class GoogleGeminiAdapter extends BaseProviderAdapter {
       throw new Error(`Google API key not found. Set ${this.envKeyName} environment variable.`);
     }
 
-    const baseUrl = this.config.base_url || 'https://generativelanguage.googleapis.com/v1beta';
+    const baseUrl = this.config.base_url || GOOGLE_API_BASE;
     const url = `${baseUrl}/models/${request.model}:generateContent`;
 
     // Convert messages to Gemini format

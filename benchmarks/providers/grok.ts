@@ -5,6 +5,7 @@
  */
 
 import { BaseProviderAdapter, withRetry } from './base.js';
+import { GROK_API_BASE } from './constants.js';
 import type {
   CompletionRequest,
   CompletionResponse,
@@ -58,7 +59,7 @@ export class GrokAdapter extends BaseProviderAdapter {
       throw new Error(`xAI API key not found. Set ${this.envKeyName} environment variable.`);
     }
 
-    const baseUrl = this.config.base_url || 'https://api.x.ai/v1';
+    const baseUrl = this.config.base_url || GROK_API_BASE;
     const url = `${baseUrl}/chat/completions`;
 
     const body: GrokRequest = {

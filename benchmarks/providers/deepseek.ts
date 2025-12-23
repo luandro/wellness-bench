@@ -5,6 +5,7 @@
  */
 
 import { BaseProviderAdapter, withRetry } from './base.js';
+import { DEEPSEEK_API_BASE } from './constants.js';
 import type {
   CompletionRequest,
   CompletionResponse,
@@ -58,7 +59,7 @@ export class DeepSeekAdapter extends BaseProviderAdapter {
       throw new Error(`DeepSeek API key not found. Set ${this.envKeyName} environment variable.`);
     }
 
-    const baseUrl = this.config.base_url || 'https://api.deepseek.com/v1';
+    const baseUrl = this.config.base_url || DEEPSEEK_API_BASE;
     const url = `${baseUrl}/chat/completions`;
 
     const body: DeepSeekRequest = {

@@ -4,6 +4,7 @@
  */
 
 import { BaseProviderAdapter, withRetry } from './base.js';
+import { ANTHROPIC_VERSION } from './constants.js';
 import type {
   CompletionRequest,
   CompletionResponse,
@@ -45,8 +46,6 @@ interface AnthropicResponse {
 }
 
 export class AnthropicAdapter extends BaseProviderAdapter {
-  private static readonly ANTHROPIC_VERSION = '2023-06-01';
-
   constructor(config: ProviderConfig) {
     super(config);
   }
@@ -96,7 +95,7 @@ export class AnthropicAdapter extends BaseProviderAdapter {
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
-          'anthropic-version': AnthropicAdapter.ANTHROPIC_VERSION,
+          'anthropic-version': ANTHROPIC_VERSION,
         },
         body: JSON.stringify(body),
       });

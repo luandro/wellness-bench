@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import { fetchResults } from '@/lib/basePath';
+import { toast } from '@/hooks/use-toast';
 
 export interface BenchmarkRun {
   id: string;
@@ -133,7 +134,15 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.warn('Failed to load runs catalog, using mock data:', err);
-      setError(err instanceof Error ? err.message : String(err));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
+      
+      toast({
+        title: "Failed to load benchmark runs",
+        description: "Using mock data instead. Please check your connection or configuration.",
+        variant: "destructive",
+      });
+
       // Fall back to mock data
       setRuns(mockRuns);
       if (!selectedRunIdRef.current) {
