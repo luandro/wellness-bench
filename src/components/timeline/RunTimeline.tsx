@@ -1,19 +1,15 @@
 import { useBenchmark } from '@/contexts/BenchmarkContext';
 import { cn } from '@/lib/utils';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { Calendar, ChevronRight } from 'lucide-react';
+import { useState, useRef } from 'react';
 
 export function RunTimeline() {
   const { runs, selectedRun, setSelectedRunId } = useBenchmark();
   const [showAll, setShowAll] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  };
-
   const visibleRuns = showAll ? runs : runs.slice(0, 4);
+  const selectedRunId = selectedRun?.id ?? null;
 
   return (
     <div className="relative">
@@ -23,7 +19,7 @@ export function RunTimeline() {
         className="flex items-center justify-center gap-3 overflow-x-auto scrollbar-thin py-2"
       >
         {visibleRuns.map((run, index) => {
-          const isSelected = run.id === selectedRun.id;
+          const isSelected = selectedRunId === run.id;
           
           return (
             <button
@@ -84,7 +80,7 @@ export function RunTimeline() {
 }
 
 export function RunContextHeader() {
-  const { selectedRun } = useBenchmark();
+  const { selectedRun, isLoading } = useBenchmark();
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -94,6 +90,22 @@ export function RunContextHeader() {
       year: 'numeric' 
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-4 px-6 bg-muted/30 rounded-2xl border border-border/30">
+        <span className="text-sm text-muted-foreground">Loading benchmark runs...</span>
+      </div>
+    );
+  }
+
+  if (!selectedRun) {
+    return (
+      <div className="flex items-center justify-center py-4 px-6 bg-muted/30 rounded-2xl border border-border/30">
+        <span className="text-sm text-muted-foreground">No benchmark runs available.</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 py-4 px-6 bg-muted/30 rounded-2xl border border-border/30">
