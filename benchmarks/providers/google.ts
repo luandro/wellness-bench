@@ -57,7 +57,7 @@ export class GoogleGeminiAdapter extends BaseProviderAdapter {
     }
 
     const baseUrl = this.config.base_url || 'https://generativelanguage.googleapis.com/v1beta';
-    const url = `${baseUrl}/models/${request.model}:generateContent?key=${apiKey}`;
+    const url = `${baseUrl}/models/${request.model}:generateContent`;
 
     // Convert messages to Gemini format
     let systemInstruction: { parts: Array<{ text: string }> } | undefined;
@@ -95,6 +95,7 @@ export class GoogleGeminiAdapter extends BaseProviderAdapter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
         },
         body: JSON.stringify(body),
       });

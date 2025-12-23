@@ -100,15 +100,66 @@ export function parseJsonResponse(text: string): unknown {
       return JSON.parse(jsonMatch[1]);
     }
 
-    // Try to find JSON object/array in the text
-    const objectMatch = text.match(/\{[\s\S]*\}/);
-    if (objectMatch) {
-      return JSON.parse(objectMatch[0]);
-    }
+    const parseEmbeddedJson = (input: string): unknown | null => {
+      for (let i = 0; i < input.length; i++) {
+        const startChar = input[i];
+        if (startChar !== '{' && startChar !== '[') continue;
 
-    const arrayMatch = text.match(/\[[\s\S]*\]/);
-    if (arrayMatch) {
-      return JSON.parse(arrayMatch[0]);
+        const stack: string[] = [];
+        let inString = false;
+        let escape = false;
+
+        for (let j = i; j < input.length; j++) {
+          const ch = input[j];
+
+          if (inString) {
+            if (escape) {
+              escape = false;
+              continue;
+            }
+            if (ch === '\\') {
+              escape = true;
+              continue;
+            }
+            if (ch === '"') {
+              inString = false;
+            }
+            continue;
+          }
+
+          if (ch === '"') {
+            inString = true;
+            continue;
+          }
+
+          if (ch === '{' || ch === '[') {
+            stack.push(ch);
+            continue;
+          }
+
+          if (ch === '}' || ch === ']') {
+            const last = stack.pop();
+            if (!last || (last === '{' && ch !== '}') || (last === '[' && ch !== ']')) {
+              break;
+            }
+            if (stack.length === 0) {
+              const candidate = input.slice(i, j + 1);
+              try {
+                return JSON.parse(candidate);
+              } catch {
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const embedded = parseEmbeddedJson(text);
+    if (embedded !== null) {
+      return embedded;
     }
 
     throw new Error('Could not parse JSON from response');

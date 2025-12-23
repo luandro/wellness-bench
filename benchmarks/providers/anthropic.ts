@@ -67,11 +67,13 @@ export class AnthropicAdapter extends BaseProviderAdapter {
     for (const msg of request.messages) {
       if (msg.role === 'system') {
         systemPrompt = msg.content;
-      } else {
+      } else if (msg.role === 'user' || msg.role === 'assistant') {
         messages.push({
-          role: msg.role as 'user' | 'assistant',
+          role: msg.role,
           content: msg.content,
         });
+      } else {
+        throw new Error(`Unsupported message role for Anthropic: ${msg.role}`);
       }
     }
 
