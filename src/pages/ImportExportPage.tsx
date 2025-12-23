@@ -23,7 +23,8 @@ import {
   BarChart3,
   Settings,
   Check,
-  Loader2
+  Loader2,
+  FileText
 } from 'lucide-react';
 
 export default function ImportExportPage() {
@@ -37,7 +38,23 @@ export default function ImportExportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importType, setImportType] = useState<'config' | 'results' | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [isExporting, setIsExporting] = useState<'config' | 'results' | null>(null);
+  const [isExporting, setIsExporting] = useState<'config' | 'results' | 'csv' | null>(null);
+
+  const downloadFile = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadJson = (data: object, filename: string) => {
+    downloadFile(JSON.stringify(data, null, 2), filename, 'application/json');
+  };
 
   const exportConfigBundle = () => {
     setIsExporting('config');
@@ -64,6 +81,79 @@ export default function ImportExportPage() {
       toast({
         title: "Export Failed",
         description: error instanceof Error ? error.message : "Failed to export config bundle.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const exportResultsCSV = () => {
+    const completedRuns = runs.filter(r => r.status === 'completed');
+    
+    if (completedRuns.length === 0) {
+      toast({
+        title: "No Results",
+        description: "There are no completed runs to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsExporting('csv');
+    try {
+      const headers = [
+        'Run ID',
+        'Run Name',
+        'Date',
+        'Question ID',
+        'Provider',
+        'Model',
+        'Wellbeing Definition',
+        'Main Problems',
+        'Alignment Score (0-5)',
+        'Coherence Score (0-5)',
+        'Humility Score (0-5)',
+        'Detected Biases',
+        'Raw Answer'
+      ];
+
+      const rows = completedRuns.flatMap(run => 
+        run.items.map(item => {
+          if (!item.result) return null;
+          
+          const provider = providers.providers.find(p => p.provider_id === item.provider_id);
+          
+          return [
+            run.id,
+            run.name,
+            new Date(run.created_at).toLocaleDateString(),
+            item.question_id,
+            provider?.display_name || item.provider_id,
+            item.model_id,
+            `"${(item.result.step_a.wellbeing_definition || '').replace(/"/g, '""')}"`,
+            `"${(item.result.step_a.main_problems || []).join('; ').replace(/"/g, '""')}"`,
+            item.result.step_c.alignment_score_0_5,
+            item.result.step_d.coherence_score_0_5,
+            item.result.step_e.humility_score_0_5,
+            `"${(item.result.step_b.detected_biases || []).map(b => b.label).join('; ').replace(/"/g, '""')}"`,
+            `"${(item.result.raw_answer || '').replace(/"/g, '""')}"`
+          ].join(',');
+        })
+      ).filter(Boolean);
+
+      const csvContent = [headers.join(','), ...rows].join('\n');
+      
+      downloadFile(csvContent, 'benchmark-results.csv', 'text/csv');
+      
+      toast({
+        title: "CSV Exported",
+        description: `Exported ${rows.length} result rows.`,
+      });
+    } catch (error) {
+       toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export results CSV.",
         variant: "destructive",
       });
     } finally {
@@ -204,17 +294,6 @@ export default function ImportExportPage() {
     }
   };
 
-  const downloadJson = (data: object, filename: string) => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
 
   const completedRunsCount = runs.filter(r => r.status === 'completed').length;
   const isBusy = isImporting || isExporting !== null;
@@ -310,6 +389,40 @@ export default function ImportExportPage() {
                     <Package className="w-4 h-4 mr-2" />
                   )}
                   {isExporting === 'results' ? 'Exporting...' : 'Export Results Bundle'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="card-interactive">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Results CSV</CardTitle>
+                    <CardDescription>Flattened results for spreadsheet analysis</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Badge variant="secondary">
+                    {completedRunsCount} completed runs
+                  </Badge>
+                </div>
+                <Button
+                  onClick={exportResultsCSV}
+                  className="w-full"
+                  variant="outline"
+                  disabled={isBusy || completedRunsCount === 0}
+                >
+                  {isExporting === 'csv' ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4 mr-2" />
+                  )}
+                  {isExporting === 'csv' ? 'Exporting...' : 'Export Results CSV'}
                 </Button>
               </CardContent>
             </Card>

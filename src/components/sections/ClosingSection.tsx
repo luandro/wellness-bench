@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 
 export const ClosingSection = () => {
   const sectionRef = useRef<HTMLElement>(null);
@@ -21,6 +22,14 @@ export const ClosingSection = () => {
     return () => observer.disconnect();
   }, []);
 
+  const scrollToMethodology = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const element = document.getElementById('methodology');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <section ref={sectionRef} className="section-full min-h-[60vh] flex items-center justify-center">
       <div className="max-w-2xl mx-auto text-center px-6">
@@ -37,18 +46,19 @@ export const ClosingSection = () => {
         {/* Subtle links */}
         <div className="animate-on-scroll mt-16 flex items-center justify-center gap-8" style={{ transitionDelay: '0.2s' }}>
           <a 
-            href="#methodology" 
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4 decoration-border hover:decoration-foreground"
+            href="#methodology"
+            onClick={scrollToMethodology}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4 decoration-border hover:decoration-foreground cursor-pointer"
           >
             About the methodology
           </a>
           <span className="text-border">•</span>
-          <a 
-            href="#export" 
+          <Link 
+            to="/import-export" 
             className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4 decoration-border hover:decoration-foreground"
           >
             Export data
-          </a>
+          </Link>
         </div>
 
         {/* Decorative element */}

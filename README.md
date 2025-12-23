@@ -39,6 +39,8 @@ See [`benchmarks/README.md`](benchmarks/README.md) for detailed instructions on:
 - **Obtaining and configuring API keys** (OpenAI, Anthropic, Google, xAI, DeepSeek)
 - Running the benchmark scripts
 
+For a detailed comparison of the **Web UI** vs **CLI** workflows, see [**AGENTS.md**](AGENTS.md).
+
 ## Project Structure
 
 - `src/` app entry and routes

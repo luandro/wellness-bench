@@ -3,14 +3,17 @@ import { QuestionsSection } from '@/components/sections/QuestionsSection';
 import { CommonGroundSection } from '@/components/sections/CommonGroundSection';
 import { DivergencesSection } from '@/components/sections/DivergencesSection';
 import { ModelDeepDiveSection } from '@/components/sections/ModelDeepDiveSection';
+import { MethodologySection } from '@/components/sections/MethodologySection';
 import { ClosingSection } from '@/components/sections/ClosingSection';
 import { BenchmarkProvider } from '@/contexts/BenchmarkContext';
 import { RunTimeline, RunContextHeader } from '@/components/timeline/RunTimeline';
 import { BiasToggleGroup } from '@/components/ui/bias-toggle';
+import { AdminAccessButton } from '@/components/layout/AdminAccessButton';
 
 const Index = () => {
   return (
     <BenchmarkProvider>
+      <AdminAccessButton />
       <main className="min-h-screen">
         <HeroSection />
         
@@ -41,6 +44,7 @@ const Index = () => {
         <CommonGroundSection />
         <DivergencesSection />
         <ModelDeepDiveSection />
+        <MethodologySection />
         <ClosingSection />
       </main>
     </BenchmarkProvider>

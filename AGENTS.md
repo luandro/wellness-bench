@@ -1,36 +1,38 @@
-# Repository Guidelines
+# AI Human Wellness Benchmark - Workflows
 
-## Project Structure & Module Organization
-- `src/` contains the React app entry (`main.tsx`) and router (`App.tsx`).
-- `src/pages/` holds route-level screens, while `src/components/` is for reusable UI (with shadcn primitives in `src/components/ui/`).
-- `src/contexts/`, `src/hooks/`, `src/lib/`, `src/data/`, and `src/types/` keep state, utilities, datasets, and shared types organized.
-- `public/` stores static assets and `index.html` is the Vite entry point.
-- `benchmarks/` contains the benchmark pipeline (configs, providers, scripts) with output in `benchmarks/results/` (gitignored).
-- `workflows-pending/` keeps draft GitHub Actions workflows.
+This document outlines the two primary workflows for generating and managing benchmark data.
 
-## Build, Test, and Development Commands
-- `npm install` installs dependencies.
-- `npm run dev` starts the Vite dev server.
-- `npm run build` creates a production build; `npm run build:dev` builds with development mode.
-- `npm run preview` serves the production build locally.
-- `npm run lint` runs ESLint across the repo.
-- `npm run benchmark` runs the benchmark pipeline; `npm run benchmark:dry` prints the plan; `npm run benchmark:build` type-checks benchmark scripts.
+## 1. Web UI (Builder Mode) - Experimentation & Prototyping
 
-## Coding Style & Naming Conventions
-- TypeScript + React (Vite). Use the `@/` alias for `src/` imports.
-- Two-space indentation, semicolons, ES modules.
-- Components use PascalCase (`src/pages/BenchmarkPage.tsx`), hooks use `useX`, and shared types live in `src/types/`.
-- Styling relies on Tailwind classes and `className` composition; prefer existing `src/components/ui/` primitives.
-- Linting is configured in `eslint.config.js` (React hooks + refresh rules).
+**Best for:** Quick tests, debugging prompts, exploring model behavior interactively.
 
-## Testing Guidelines
-- No automated test framework is configured currently (no `*.test.*` files found).
-- If you add tests, colocate `*.test.tsx` or `__tests__/` near the feature and document the new test command in `package.json`.
+*   **Access:** Open the application in your browser (e.g., `http://localhost:5173`).
+*   **Admin Area:** Click the gear icon in the top-right corner to access the **Run Dashboard**.
+*   **API Keys:** Keys are stored locally in your browser's secure storage. You must input them manually.
+*   **Data Persistence:**
+    *   Runs generated here are **TEMPORARY**. They live in your browser's local storage.
+    *   **They are NOT automatically saved to the git repository.**
+    *   **To Save:** You must use the **Export** feature (in the "Import/Export" tab) to download a JSON or CSV bundle. You can then manually commit these files if desired, but this is not the standard path for official benchmark records.
 
-## Commit & Pull Request Guidelines
-- Recent commits use short, imperative, sentence-case subjects (e.g., “Add …”, “Fix …”). Keep messages focused on one change.
-- PRs should include a concise summary, linked issue (if applicable), and screenshots/gifs for UI changes.
-- Ensure `npm run lint` and `npm run build` pass before requesting review.
+## 2. CLI / GitHub Actions - Official Production Runs
 
-## Configuration & Secrets
-- Benchmark runs require provider API keys (see `benchmarks/config/` and `benchmarks/README.md`); never commit secrets.
+**Best for:** Official benchmark records, reproducible evaluations, large-scale batch processing.
+
+*   **Access:** Terminal or GitHub Actions interface.
+*   **Execution:** Runs the Node.js pipeline script (`benchmarks/scripts/run-benchmark.ts`).
+*   **API Keys:** Read from environment variables (`OPENAI_API_KEY`, etc.).
+*   **Data Persistence:**
+    *   **Automatic File Generation:** The script automatically writes results to `benchmarks/results/<run_id>/` and updates the catalog at `benchmarks/results/runs.json`.
+    *   **Commit Strategy:**
+        *   **Local CLI:** You must manually `git add` and `git commit` the generated files in `benchmarks/results/`.
+        *   **GitHub Actions:** The "Run Benchmark" workflow is configured to automatically commit and push the new results back to the repository (or create a PR), creating a permanent, version-controlled record.
+
+## Summary
+
+| Feature | Web UI (Builder) | CLI / GitHub Actions |
+| :--- | :--- | :--- |
+| **Purpose** | Prototyping, debugging, interactive analysis | Official records, automation, reproducibility |
+| **Execution** | Browser-based (Client-side) | Node.js Script (Server-side/CI) |
+| **Persistence** | Browser LocalStorage (Ephemeral) | File System (Git-tracked) |
+| **Commit** | Manual Export -> Manual Commit | Automatic (in CI) or Manual (CLI) |
+| **API Keys** | Input in UI (Browser Storage) | Environment Variables (`.env` / Secrets) |
