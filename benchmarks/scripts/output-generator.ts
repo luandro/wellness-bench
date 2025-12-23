@@ -42,6 +42,15 @@ async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
   await writeFile(filePath, content, 'utf-8');
 }
 
+function assertSafePathSegment(value: string, label: string): void {
+  if (!value || value.trim().length === 0) {
+    throw new Error(`Invalid ${label}: value is empty`);
+  }
+  if (value.includes('/') || value.includes('\\') || value.includes('..')) {
+    throw new Error(`Invalid ${label}: "${value}" contains unsafe path characters`);
+  }
+}
+
 /**
  * Generate a summary from evaluation outputs
  */
@@ -170,6 +179,15 @@ export async function generateOutputBundle(
 ): Promise<{ runDir: string; indexPath: string }> {
   const runDir = resolve(rootDir, plan.output_dir, plan.run_id);
   await ensureDir(runDir);
+
+  for (const question of plan.questions) {
+    assertSafePathSegment(question.id, 'question.id');
+  }
+
+  for (const model of plan.models) {
+    assertSafePathSegment(model.provider_id, 'model.provider_id');
+    assertSafePathSegment(model.model_id, 'model.model_id');
+  }
 
   // Create subdirectories
   const perQuestionDir = resolve(runDir, 'per_question');
@@ -404,8 +422,27 @@ export async function updateRunsCatalog(
   // Load existing catalog or create new
   let catalog: RunsCatalog;
   if (existsSync(catalogPath)) {
-    const content = await readFile(catalogPath, 'utf-8');
-    catalog = JSON.parse(content) as RunsCatalog;
+    let content = '';
+    try {
+      content = await readFile(catalogPath, 'utf-8');
+      catalog = JSON.parse(content) as RunsCatalog;
+    } catch (error) {
+      const backupPath = `${catalogPath}.corrupt-${Date.now()}`;
+      if (content) {
+        try {
+          await writeFile(backupPath, content, 'utf-8');
+          console.warn(`Corrupt runs catalog saved to ${backupPath}`);
+        } catch (writeError) {
+          console.warn('Failed to write runs catalog backup:', writeError);
+        }
+      }
+      console.warn('Failed to parse runs catalog, recreating:', error);
+      catalog = {
+        version: '1.0.0',
+        updated_at: new Date().toISOString(),
+        runs: [],
+      };
+    }
   } else {
     catalog = {
       version: '1.0.0',
