@@ -1,4 +1,4 @@
-# AI Human Wellness Benchmark
+# Wellness Bench
 
 Evaluate how AI models reason about human and planetary well-being using a Buen Vivir (Sumak Kawsay) lens. The repo contains a React + Vite app for configuring questions, running evaluations, and reviewing results, plus a benchmark pipeline for batch runs.
 

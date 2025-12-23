@@ -51,9 +51,8 @@ export function Sidebar() {
           </div>
           <div>
             <h1 className="font-semibold text-sidebar-foreground text-sm leading-tight">
-              AI Wellness
+              Wellness Bench
             </h1>
-            <p className="text-xs text-muted-foreground">Benchmark</p>
           </div>
         </div>
       </div>

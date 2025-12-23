@@ -34,7 +34,7 @@ export const HeroSection = () => {
       <div className="section-container text-center relative z-10">
         {/* Title */}
         <h1 className="animate-on-scroll text-display-sm md:text-display font-serif text-foreground mb-8">
-          AI Human Wellness Benchmark
+          Wellness Bench
         </h1>
         
         {/* Subtitle */}
