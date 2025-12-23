@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { RandomUnderline } from '../ui/random-underline';
 
 export const HeroSection = () => {
   const sectionRef = useRef<HTMLElement>(null);
@@ -43,7 +44,7 @@ export const HeroSection = () => {
 
         {/* Title */}
         <h1 className="animate-on-scroll text-display-sm md:text-display font-serif text-foreground mb-8">
-          Wellness Bench
+          <RandomUnderline>Wellness Bench</RandomUnderline>
         </h1>
         
         {/* Subtitle */}

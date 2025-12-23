@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RandomUnderline } from '../ui/random-underline';
 import {
   Accordion,
   AccordionContent,
@@ -204,7 +205,7 @@ export const ModelDeepDiveSection = () => {
         {/* Section header */}
         <div className="animate-on-scroll text-center mb-12">
           <h2 className="text-title font-serif text-foreground mb-4">
-            Model Deep Dive
+            <RandomUnderline strokeWidth={4}>Model Deep Dive</RandomUnderline>
           </h2>
           <p className="text-body-lg text-muted-foreground max-w-2xl mx-auto">
             Explore detailed analysis for each model. Select a provider to see their full response and evaluation.

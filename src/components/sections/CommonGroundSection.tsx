@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Circle } from 'lucide-react';
+import { RandomUnderline } from '../ui/random-underline';
 
-// Mock data - would come from results in real implementation
 const commonGroundData = [
   {
     theme: 'Climate & Ecology',
@@ -68,7 +68,7 @@ export const CommonGroundSection = () => {
         {/* Section header */}
         <div className="animate-on-scroll text-center mb-16">
           <h2 className="text-title font-serif text-foreground mb-4">
-            What most models agree on
+            <RandomUnderline strokeWidth={4}>What most models agree on</RandomUnderline>
           </h2>
           <p className="text-body-lg text-muted-foreground max-w-2xl mx-auto">
             Before exploring differences, here are the themes where AI models show broad consensus.

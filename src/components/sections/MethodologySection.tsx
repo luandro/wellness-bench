@@ -1,10 +1,11 @@
-import { 
-  GitMerge, 
-  Search, 
-  Scale, 
-  BrainCircuit, 
-  Eye 
+import {
+  GitMerge,
+  Search,
+  Scale,
+  BrainCircuit,
+  Eye
 } from 'lucide-react';
+import { RandomUnderline } from '../ui/random-underline';
 
 const steps = [
   {
@@ -54,9 +55,10 @@ export const MethodologySection = () => {
     <section id="methodology" className="section-container bg-muted/30">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Methodology</h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Our evaluation pipeline breaks down model responses through a multi-step analytical process to uncover deep structural biases and alignment patterns.
+          <h2 className="text-3xl font-bold tracking-tight mb-4">
+            <RandomUnderline strokeWidth={4}>Methodology</RandomUnderline>
+          </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">            Our evaluation pipeline breaks down model responses through a multi-step analytical process to uncover deep structural biases and alignment patterns.
           </p>
         </div>
 

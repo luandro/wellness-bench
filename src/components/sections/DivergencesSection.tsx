@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useBenchmark } from '@/contexts/BenchmarkContext';
+import { RandomUnderline } from '../ui/random-underline';
 import {
   Tooltip,
   TooltipContent,
@@ -142,7 +143,7 @@ export const DivergencesSection = () => {
         {/* Section header */}
         <div className="animate-on-scroll text-center mb-16">
           <h2 className="text-title font-serif text-foreground mb-4">
-            Where models diverge
+            <RandomUnderline strokeWidth={4}>Where models diverge</RandomUnderline>
           </h2>
           <p className="text-body-lg text-muted-foreground max-w-2xl mx-auto">
             These contrasts reveal underlying assumptions and ideological leanings — often invisible until compared.

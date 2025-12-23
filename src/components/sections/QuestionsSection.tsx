@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { RandomUnderline } from '../ui/random-underline';
 
 // Caption metadata for display - maps question titles to descriptive captions
 const questionCaptions: Record<string, string> = {
@@ -51,7 +52,9 @@ export const QuestionsSection = () => {
     <section ref={sectionRef} className="section-container">
       {/* Section header */}
       <div className="animate-on-scroll text-center mb-20">
-        <h2 className="text-title font-serif text-foreground mb-4">The Three Questions</h2>
+        <h2 className="text-title font-serif text-foreground mb-4">
+          <RandomUnderline strokeWidth={4}>The Three Questions</RandomUnderline>
+        </h2>
         <p className="text-body-lg text-muted-foreground max-w-2xl mx-auto">
           Each question probes a different aspect of how AI models reason about collective well-being.
         </p>
