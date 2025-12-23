@@ -22,7 +22,8 @@ import {
   Package,
   BarChart3,
   Settings,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react';
 
 export default function ImportExportPage() {
@@ -35,26 +36,39 @@ export default function ImportExportPage() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importType, setImportType] = useState<'config' | 'results' | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState<'config' | 'results' | null>(null);
 
   const exportConfigBundle = () => {
-    const bundle = {
-      questions,
-      eval_prompts: evalPrompts,
-      providers: {
-        ...providers,
-        providers: providers.providers.map(p => ({
-          ...p,
-          // Never include any key information in exports
-        })),
-      },
-      exported_at: new Date().toISOString(),
-    };
+    setIsExporting('config');
+    try {
+      const bundle = {
+        questions,
+        eval_prompts: evalPrompts,
+        providers: {
+          ...providers,
+          providers: providers.providers.map(p => ({
+            ...p,
+            // Never include any key information in exports
+          })),
+        },
+        exported_at: new Date().toISOString(),
+      };
 
-    downloadJson(bundle, 'benchmark-config-bundle.json');
-    toast({
-      title: "Config Exported",
-      description: "Configuration bundle downloaded successfully.",
-    });
+      downloadJson(bundle, 'benchmark-config-bundle.json');
+      toast({
+        title: "Config Exported",
+        description: "Configuration bundle downloaded successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export config bundle.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   const exportResultsBundle = () => {
@@ -69,34 +83,46 @@ export default function ImportExportPage() {
       return;
     }
 
-    const catalog = {
-      version: "1.0.0",
-      generated_at: new Date().toISOString(),
-      runs: completedRuns.map(r => ({
-        id: r.id,
-        name: r.name,
-        created_at: r.created_at,
-        question_count: new Set(r.items.map(i => i.question_id)).size,
-        provider_count: new Set(r.items.map(i => i.provider_id)).size,
-      })),
-      questions: questions.questions,
-      providers: providers.providers.map(p => ({ id: p.provider_id, name: p.display_name })),
-    };
+    setIsExporting('results');
+    try {
+      const catalog = {
+        version: "1.0.0",
+        generated_at: new Date().toISOString(),
+        runs: completedRuns.map(r => ({
+          id: r.id,
+          name: r.name,
+          created_at: r.created_at,
+          question_count: new Set(r.items.map(i => i.question_id)).size,
+          provider_count: new Set(r.items.map(i => i.provider_id)).size,
+        })),
+        questions: questions.questions,
+        providers: providers.providers.map(p => ({ id: p.provider_id, name: p.display_name })),
+      };
 
-    const bundle = {
-      catalog,
-      runs: completedRuns,
-      syntheses,
-    };
+      const bundle = {
+        catalog,
+        runs: completedRuns,
+        syntheses,
+      };
 
-    downloadJson(bundle, 'benchmark-results-bundle.json');
-    toast({
-      title: "Results Exported",
-      description: `Exported ${completedRuns.length} runs with ${syntheses.length} syntheses.`,
-    });
+      downloadJson(bundle, 'benchmark-results-bundle.json');
+      toast({
+        title: "Results Exported",
+        description: `Exported ${completedRuns.length} runs with ${syntheses.length} syntheses.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export results bundle.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   const handleImport = (type: 'config' | 'results') => {
+    if (isImporting || isExporting) return;
     setImportType(type);
     fileInputRef.current?.click();
   };
@@ -115,8 +141,12 @@ export default function ImportExportPage() {
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      setImportType(null);
+      return;
+    }
 
+    setIsImporting(true);
     try {
       const text = await file.text();
       const data = JSON.parse(text);
@@ -166,11 +196,12 @@ export default function ImportExportPage() {
         description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      // Reset
+      event.target.value = '';
+      setImportType(null);
+      setIsImporting(false);
     }
-
-    // Reset
-    event.target.value = '';
-    setImportType(null);
   };
 
   const downloadJson = (data: object, filename: string) => {
@@ -186,6 +217,7 @@ export default function ImportExportPage() {
   };
 
   const completedRunsCount = runs.filter(r => r.status === 'completed').length;
+  const isBusy = isImporting || isExporting !== null;
 
   return (
     <MainLayout>
@@ -235,9 +267,13 @@ export default function ImportExportPage() {
                     {providers.providers.length} providers
                   </Badge>
                 </div>
-                <Button onClick={exportConfigBundle} className="w-full">
-                  <Package className="w-4 h-4 mr-2" />
-                  Export Config Bundle
+                <Button onClick={exportConfigBundle} className="w-full" disabled={isBusy}>
+                  {isExporting === 'config' ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Package className="w-4 h-4 mr-2" />
+                  )}
+                  {isExporting === 'config' ? 'Exporting...' : 'Export Config Bundle'}
                 </Button>
               </CardContent>
             </Card>
@@ -263,13 +299,17 @@ export default function ImportExportPage() {
                     {syntheses.length} syntheses
                   </Badge>
                 </div>
-                <Button 
-                  onClick={exportResultsBundle} 
+                <Button
+                  onClick={exportResultsBundle}
                   className="w-full"
-                  disabled={completedRunsCount === 0}
+                  disabled={isBusy || completedRunsCount === 0}
                 >
-                  <Package className="w-4 h-4 mr-2" />
-                  Export Results Bundle
+                  {isExporting === 'results' ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Package className="w-4 h-4 mr-2" />
+                  )}
+                  {isExporting === 'results' ? 'Exporting...' : 'Export Results Bundle'}
                 </Button>
               </CardContent>
             </Card>
@@ -295,13 +335,18 @@ export default function ImportExportPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleImport('config')} 
+                <Button
+                  variant="outline"
+                  onClick={() => handleImport('config')}
                   className="w-full"
+                  disabled={isBusy}
                 >
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Select Config File
+                  {isImporting && importType === 'config' ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <FolderOpen className="w-4 h-4 mr-2" />
+                  )}
+                  {isImporting && importType === 'config' ? 'Importing...' : 'Select Config File'}
                 </Button>
               </CardContent>
             </Card>
@@ -319,13 +364,18 @@ export default function ImportExportPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleImport('results')} 
+                <Button
+                  variant="outline"
+                  onClick={() => handleImport('results')}
                   className="w-full"
+                  disabled={isBusy}
                 >
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Select Results File
+                  {isImporting && importType === 'results' ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <FolderOpen className="w-4 h-4 mr-2" />
+                  )}
+                  {isImporting && importType === 'results' ? 'Importing...' : 'Select Results File'}
                 </Button>
               </CardContent>
             </Card>

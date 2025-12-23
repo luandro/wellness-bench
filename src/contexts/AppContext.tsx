@@ -9,6 +9,7 @@ import type {
   SynthesisSummary
 } from '@/types/benchmark';
 import { encryptApiKey, decryptApiKey, isCryptoAvailable } from '@/lib/crypto';
+import { toast } from '@/hooks/use-toast';
 
 import questionsData from '@/data/questions.json';
 import evalPromptsData from '@/data/eval_prompts.json';
@@ -91,47 +92,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [resultsBundle, setResultsBundle] = useState<ResultsBundle | null>(null);
   const [syntheses, setSyntheses] = useState<SynthesisSummary[]>([]);
 
+  const reportStorageError = useCallback((message: string, error: unknown) => {
+    console.error(message, error);
+    toast({
+      title: 'Storage Error',
+      description: message,
+      variant: 'destructive',
+    });
+  }, []);
+
+  const safeSetItem = useCallback((key: string, value: string, label: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      reportStorageError(`Failed to save ${label}.`, error);
+    }
+  }, [reportStorageError]);
+
   // Load from localStorage on mount
   useEffect(() => {
-    try {
-      const savedQuestions = localStorage.getItem(STORAGE_KEYS.QUESTIONS);
-      if (savedQuestions) setQuestionsState(JSON.parse(savedQuestions));
-      
-      const savedEvalPrompts = localStorage.getItem(STORAGE_KEYS.EVAL_PROMPTS);
-      if (savedEvalPrompts) setEvalPromptsState(JSON.parse(savedEvalPrompts));
-      
-      const savedProviders = localStorage.getItem(STORAGE_KEYS.PROVIDERS);
-      if (savedProviders) setProvidersState(JSON.parse(savedProviders));
-      
-      const savedKeys = localStorage.getItem(STORAGE_KEYS.API_KEYS);
-      if (savedKeys) setStoredKeys(JSON.parse(savedKeys));
-      
-      const savedRuns = localStorage.getItem(STORAGE_KEYS.RUNS);
-      if (savedRuns) setRuns(JSON.parse(savedRuns));
-      
-      const savedSyntheses = localStorage.getItem(STORAGE_KEYS.SYNTHESES);
-      if (savedSyntheses) setSyntheses(JSON.parse(savedSyntheses));
-    } catch (e) {
-      console.error('Error loading from localStorage:', e);
-    }
-  }, []);
+    const loadFromStorage = <T,>(key: string, setter: (value: T) => void, label: string) => {
+      let raw: string | null = null;
+      try {
+        raw = localStorage.getItem(key);
+      } catch (error) {
+        reportStorageError(`Failed to access ${label}.`, error);
+        return;
+      }
+      if (!raw) {
+        return;
+      }
+      try {
+        setter(JSON.parse(raw));
+      } catch (error) {
+        reportStorageError(`Failed to load ${label}.`, error);
+      }
+    };
+
+    loadFromStorage<QuestionsConfig>(STORAGE_KEYS.QUESTIONS, setQuestionsState, 'questions');
+    loadFromStorage<EvalPromptsConfig>(STORAGE_KEYS.EVAL_PROMPTS, setEvalPromptsState, 'evaluation prompts');
+    loadFromStorage<ProvidersConfig>(STORAGE_KEYS.PROVIDERS, setProvidersState, 'providers');
+    loadFromStorage<StoredApiKey[]>(STORAGE_KEYS.API_KEYS, setStoredKeys, 'API keys');
+    loadFromStorage<Run[]>(STORAGE_KEYS.RUNS, setRuns, 'runs');
+    loadFromStorage<SynthesisSummary[]>(STORAGE_KEYS.SYNTHESES, setSyntheses, 'syntheses');
+  }, [reportStorageError]);
 
   const setQuestions = (config: QuestionsConfig) => {
     const updated = { ...config, updated_at: new Date().toISOString() };
     setQuestionsState(updated);
-    localStorage.setItem(STORAGE_KEYS.QUESTIONS, JSON.stringify(updated));
+    safeSetItem(STORAGE_KEYS.QUESTIONS, JSON.stringify(updated), 'questions');
   };
 
   const setEvalPrompts = (config: EvalPromptsConfig) => {
     const updated = { ...config, updated_at: new Date().toISOString() };
     setEvalPromptsState(updated);
-    localStorage.setItem(STORAGE_KEYS.EVAL_PROMPTS, JSON.stringify(updated));
+    safeSetItem(STORAGE_KEYS.EVAL_PROMPTS, JSON.stringify(updated), 'evaluation prompts');
   };
 
   const setProviders = (config: ProvidersConfig) => {
     const updated = { ...config, updated_at: new Date().toISOString() };
     setProvidersState(updated);
-    localStorage.setItem(STORAGE_KEYS.PROVIDERS, JSON.stringify(updated));
+    safeSetItem(STORAGE_KEYS.PROVIDERS, JSON.stringify(updated), 'providers');
   };
 
   const setApiKey = useCallback(async (providerId: string, key: string): Promise<void> => {
@@ -158,14 +179,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       newKey
     ];
     setStoredKeys(updated);
-    localStorage.setItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated));
-  }, [storedKeys]);
+    safeSetItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated), 'API keys');
+  }, [safeSetItem, storedKeys]);
 
   const removeApiKey = useCallback((providerId: string) => {
     const updated = storedKeys.filter(k => k.provider_id !== providerId);
     setStoredKeys(updated);
-    localStorage.setItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated));
-  }, [storedKeys]);
+    safeSetItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated), 'API keys');
+  }, [safeSetItem, storedKeys]);
 
   const getApiKey = useCallback(async (providerId: string): Promise<string | null> => {
     const stored = storedKeys.find(k => k.provider_id === providerId);
@@ -181,21 +202,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return atob(stored.encrypted_key);
       }
     } catch (error) {
-      console.error('Failed to decrypt API key:', error);
+      reportStorageError('Unable to decrypt stored API key. Please re-enter it.', error);
+      const updated = storedKeys.filter(k => k.provider_id !== providerId);
+      setStoredKeys(updated);
+      safeSetItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated), 'API keys');
       return null;
     }
-  }, [storedKeys]);
+  }, [reportStorageError, safeSetItem, storedKeys]);
 
   const addRun = (run: Run) => {
     const updated = [...runs, run];
     setRuns(updated);
-    localStorage.setItem(STORAGE_KEYS.RUNS, JSON.stringify(updated));
+    safeSetItem(STORAGE_KEYS.RUNS, JSON.stringify(updated), 'runs');
   };
 
   const updateRun = (run: Run) => {
     const updated = runs.map(r => r.id === run.id ? run : r);
     setRuns(updated);
-    localStorage.setItem(STORAGE_KEYS.RUNS, JSON.stringify(updated));
+    safeSetItem(STORAGE_KEYS.RUNS, JSON.stringify(updated), 'runs');
   };
 
   const loadResultsBundle = (bundle: ResultsBundle) => {
@@ -209,7 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       synthesis
     ];
     setSyntheses(updated);
-    localStorage.setItem(STORAGE_KEYS.SYNTHESES, JSON.stringify(updated));
+    safeSetItem(STORAGE_KEYS.SYNTHESES, JSON.stringify(updated), 'syntheses');
   };
 
   return (
