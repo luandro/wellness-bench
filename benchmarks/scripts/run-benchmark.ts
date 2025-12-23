@@ -182,13 +182,22 @@ async function main(): Promise<void> {
     }
 
     // Get list of providers needed
-    const requiredProviderIds = [...new Set(plan.models.map((m) => m.provider_id))];
+    const requiredProviderIds = new Set(plan.models.map((m) => m.provider_id));
+    if (plan.evaluation_params?.evaluator_provider) {
+      requiredProviderIds.add(plan.evaluation_params.evaluator_provider);
+    }
+    if (plan.synthesis?.provider) {
+      requiredProviderIds.add(plan.synthesis.provider);
+    }
+    if (plan.translation?.provider) {
+      requiredProviderIds.add(plan.translation.provider);
+    }
 
     // Validate API keys
     console.log('Validating API keys...');
     const { valid, missing } = validateProviderKeys(
       configs.providers.providers,
-      requiredProviderIds
+      [...requiredProviderIds]
     );
 
     if (!valid) {
@@ -204,7 +213,7 @@ async function main(): Promise<void> {
     // Create provider adapters
     console.log('\nInitializing provider adapters...');
     const adapters = createAvailableAdapters(configs.providers.providers, {
-      filterProviders: requiredProviderIds,
+      filterProviders: [...requiredProviderIds],
     });
     console.log(`  Initialized ${adapters.size} adapter(s).`);
 
@@ -228,31 +237,38 @@ async function main(): Promise<void> {
     // Optionally translate results
     let allSyntheses = syntheses;
     if (
-      configs.runConfig.translation?.enabled !== false &&
+      plan.translation?.enabled !== false &&
       configs.runConfig.enabled_languages.length > 1 &&
       configs.evalPrompts.translation_prompt_template
     ) {
       console.log('\nTranslating results...');
-      const translationAdapter = adapters.values().next().value;
-      const translationModel = plan.models[0];
+      const translationProviderId = plan.translation?.provider ?? plan.models[0]?.provider_id;
+      const translationModelId = plan.translation?.model ?? plan.models[0]?.model_id;
+      const translationAdapter = translationProviderId
+        ? adapters.get(translationProviderId)
+        : undefined;
 
-      if (translationAdapter && translationModel) {
+      if (translationAdapter && translationModelId) {
         const targetLanguages = configs.runConfig.enabled_languages.filter(
           (l) => l !== configs.runConfig.default_language
         );
+        const temperature = plan.translation?.temperature ?? 0.1;
 
         const { translatedSyntheses } = await translateResults(
           items,
           syntheses,
           translationAdapter,
-          translationModel.model_id,
+          translationModelId,
           configs.evalPrompts.translation_prompt_template,
           targetLanguages,
-          configs.runConfig.default_language
+          configs.runConfig.default_language,
+          temperature
         );
 
         allSyntheses = translatedSyntheses;
         console.log(`  Translated to ${targetLanguages.length} additional language(s).`);
+      } else {
+        console.warn('Translation skipped: missing adapter or model for translation.');
       }
     }
 
@@ -301,7 +317,12 @@ async function main(): Promise<void> {
 
 // Handle unhandled rejections
 process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled rejection:', reason);
+  console.error('Unhandled rejection:');
+  if (reason instanceof Error) {
+    console.error(reason.stack || reason.message);
+  } else {
+    console.error(reason);
+  }
   process.exit(1);
 });
 

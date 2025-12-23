@@ -108,7 +108,15 @@ async function runEvaluationStep<T>(
       max_tokens: params.max_tokens ?? 2000,
     });
 
-    result = parseJsonResponse(retryResponse.content) as T;
+    try {
+      result = parseJsonResponse(retryResponse.content) as T;
+    } catch (retryError) {
+      const originalMessage = parseError instanceof Error ? parseError.message : String(parseError);
+      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+      throw new Error(
+        `Failed to parse JSON after repair attempt. Original error: ${originalMessage}. Retry error: ${retryMessage}`
+      );
+    }
   }
 
   return { result, latency_ms: response.latency_ms };
@@ -184,7 +192,8 @@ async function generateSynthesis(
   questionId: string,
   responses: Array<{ modelName: string; answer: string }>,
   synthesisPrompt: string,
-  params: { temperature?: number; max_tokens?: number }
+  params: { temperature?: number; max_tokens?: number },
+  defaultLanguage: string
 ): Promise<SynthesisResult> {
   // Format responses for the prompt
   const formattedResponses = responses
@@ -212,7 +221,7 @@ async function generateSynthesis(
 
   return {
     question_id: questionId,
-    language: 'en', // Original language
+    language: defaultLanguage,
     common_ground: parsed.common_ground || [],
     key_divergences: parsed.key_divergences || [],
     salient_bias_patterns: parsed.salient_bias_patterns || [],
@@ -263,6 +272,10 @@ export async function runPipeline(
 }> {
   const items: PipelineItem[] = [];
   const { adapters, evalPrompts, concurrency } = context;
+  const evaluationParams = {
+    temperature: plan.evaluation_params?.temperature ?? 0.3,
+    max_tokens: plan.evaluation_params?.max_tokens ?? 2000,
+  };
 
   // Create rate limiters
   const globalLimit = pLimit(concurrency.max_concurrent_requests || 3);
@@ -301,9 +314,8 @@ export async function runPipeline(
       items.push(item);
 
       const providerLimit = providerLimits.get(model.provider_id)!;
-
-      const task = globalLimit(() =>
-        providerLimit(async () => {
+      const task = globalLimit(async () => {
+        await providerLimit(async () => {
           try {
             // Step 1: Generate answer
             item.status = 'generating';
@@ -328,13 +340,24 @@ export async function runPipeline(
             item.status = 'evaluating';
             context.onProgress?.(completed, total, `Evaluating: ${model.model_display_name} for ${question.id}`);
 
-            const evalResult = await runAllEvaluations(
-              adapter,
-              model.model_id,
-              item.raw_answer,
-              evalPrompts,
-              { temperature: 0.3, max_tokens: 2000 }
-            );
+            const evaluatorProviderId = plan.evaluation_params?.evaluator_provider ?? model.provider_id;
+            const evaluatorModelId = plan.evaluation_params?.evaluator_model ?? model.model_id;
+            const evaluatorAdapter = adapters.get(evaluatorProviderId);
+            if (!evaluatorAdapter) {
+              throw new Error(`No adapter for evaluation provider: ${evaluatorProviderId}`);
+            }
+
+            const runEvaluations = () =>
+              runAllEvaluations(
+                evaluatorAdapter,
+                evaluatorModelId,
+                item.raw_answer,
+                evalPrompts,
+                evaluationParams
+              );
+            const evalResult = evaluatorProviderId === model.provider_id
+              ? await runEvaluations()
+              : await (providerLimits.get(evaluatorProviderId) ?? providerLimit)(runEvaluations);
 
             item.evaluations = evalResult.outputs;
             item.metadata.evaluation_latencies = evalResult.latencies;
@@ -348,8 +371,8 @@ export async function runPipeline(
             completed++;
             context.onProgress?.(completed, total, `Completed ${completed}/${total}`);
           }
-        })
-      );
+        });
+      });
 
       tasks.push(task);
     }
@@ -362,10 +385,12 @@ export async function runPipeline(
   const syntheses: SynthesisResult[] = [];
 
   // Get a synthesis adapter (use first available)
-  const synthesisAdapter = adapters.values().next().value;
-  const synthesisModel = plan.models[0];
+  const synthesisConfig = plan.synthesis || {};
+  const synthesisProviderId = synthesisConfig.provider ?? plan.models[0]?.provider_id;
+  const synthesisModelId = synthesisConfig.model ?? plan.models[0]?.model_id;
+  const synthesisAdapter = synthesisProviderId ? adapters.get(synthesisProviderId) : undefined;
 
-  if (synthesisAdapter && synthesisModel) {
+  if (synthesisConfig.enabled !== false && synthesisAdapter && synthesisModelId) {
     for (const question of plan.questions) {
       const questionItems = items.filter(
         (i) => i.question_id === question.id && i.status === 'succeeded' && i.raw_answer
@@ -384,11 +409,12 @@ export async function runPipeline(
 
         const synthesis = await generateSynthesis(
           synthesisAdapter,
-          synthesisModel.model_id,
+          synthesisModelId,
           question.id,
           responses,
           evalPrompts.synthesis_prompt,
-          { temperature: 0.3, max_tokens: 2000 }
+          { temperature: 0.3, max_tokens: 2000 },
+          plan.default_language
         );
 
         syntheses.push(synthesis);
@@ -411,7 +437,8 @@ export async function translateResults(
   modelId: string,
   translationTemplate: string,
   targetLanguages: string[],
-  sourceLanguage: string = 'en'
+  sourceLanguage: string = 'en',
+  temperature: number = 0.1
 ): Promise<{
   translatedSyntheses: SynthesisResult[];
 }> {
@@ -426,19 +453,19 @@ export async function translateResults(
         // Translate each array field
         const translatedCommonGround = await Promise.all(
           synthesis.common_ground.map((text) =>
-            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature: 0.1 })
+            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature })
           )
         );
 
         const translatedDivergences = await Promise.all(
           synthesis.key_divergences.map((text) =>
-            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature: 0.1 })
+            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature })
           )
         );
 
         const translatedPatterns = await Promise.all(
           synthesis.salient_bias_patterns.map((text) =>
-            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature: 0.1 })
+            translateText(adapter, modelId, text, sourceLanguage, targetLang, translationTemplate, { temperature })
           )
         );
 

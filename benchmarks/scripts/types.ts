@@ -270,6 +270,9 @@ export interface RunPlan {
   git_sha?: string;
   default_language: string;
   enabled_languages: string[];
+  evaluation_params?: EvaluationParams;
+  synthesis?: SynthesisConfig;
+  translation?: TranslationConfig;
   questions: Question[];
   models: ResolvedModel[];
   output_dir: string;
