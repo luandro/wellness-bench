@@ -6,6 +6,9 @@
   "type": "object",
   "required": ["run_name", "default_language", "enabled_languages"],
   "properties": {
+    "$schema": {
+      "type": "string"
+    },
     "run_id": {
       "type": "string",
       "pattern": "^[a-z0-9-]+$",

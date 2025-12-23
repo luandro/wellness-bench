@@ -4,8 +4,11 @@
   "title": "Evaluation Prompts Configuration",
   "description": "Configuration for evaluation prompts and bias taxonomy",
   "type": "object",
-  "required": ["version", "updated_at", "answer_wrapper_prompt", "synthesis_prompt", "steps", "bias_taxonomy"],
+  "required": ["version", "updated_at", "steps", "bias_taxonomy"],
   "properties": {
+    "$schema": {
+      "type": "string"
+    },
     "version": {
       "type": "string",
       "description": "Semantic version of the configuration format"

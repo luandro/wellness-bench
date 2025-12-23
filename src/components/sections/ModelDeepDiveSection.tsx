@@ -38,7 +38,7 @@ const models: ModelData[] = [
   {
     id: 'openai',
     name: 'OpenAI',
-    modelVersion: 'GPT-4o',
+    modelVersion: 'GPT-5.2',
     summary: 'This model emphasizes technological solutions and market mechanisms, while acknowledging systemic challenges. It tends to frame responsibility broadly across stakeholders rather than naming specific power structures.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 2 },
@@ -58,7 +58,7 @@ const models: ModelData[] = [
   {
     id: 'anthropic',
     name: 'Claude',
-    modelVersion: 'Claude 3.5 Sonnet',
+    modelVersion: 'Claude 4.5 Sonnet',
     summary: 'This model shows stronger awareness of systemic issues and power dynamics. It questions growth assumptions more directly and names specific mechanisms that perpetuate harm.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 1 },
@@ -78,7 +78,7 @@ const models: ModelData[] = [
   {
     id: 'google',
     name: 'Gemini',
-    modelVersion: 'Gemini Pro 1.5',
+    modelVersion: 'Gemini 3.0 Pro',
     summary: 'This model provides comprehensive analysis but tends toward optimism about technological solutions. It balances acknowledgment of systemic issues with confidence in innovation.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 1 },
@@ -95,7 +95,7 @@ const models: ModelData[] = [
   {
     id: 'grok',
     name: 'Grok',
-    modelVersion: 'Grok-2',
+    modelVersion: 'Grok 4.1',
     summary: 'This model takes a more provocative stance, questioning assumptions on multiple sides. It shows willingness to name uncomfortable truths but sometimes lacks constructive alternatives.',
     biasProfile: [
       { id: 'market', label: 'Market bias', level: 1 },

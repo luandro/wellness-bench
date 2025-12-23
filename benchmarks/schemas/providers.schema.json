@@ -6,6 +6,9 @@
   "type": "object",
   "required": ["version", "updated_at", "providers"],
   "properties": {
+    "$schema": {
+      "type": "string"
+    },
     "version": {
       "type": "string",
       "description": "Semantic version of the configuration format"

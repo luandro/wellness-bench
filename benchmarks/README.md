@@ -56,6 +56,16 @@ benchmarks/
 1. **Node.js 20+** and **pnpm**
 2. **API keys** for the providers you want to benchmark
 
+### Obtaining API Keys
+
+You will need to obtain API keys from the respective providers. Here are the links to their developer dashboards:
+
+- **OpenAI** (GPT models): [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- **Anthropic** (Claude models): [https://console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+- **Google** (Gemini models): [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+- **xAI** (Grok models): [https://console.x.ai/](https://console.x.ai/)
+- **DeepSeek** (DeepSeek models): [https://platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
+
 ### Environment Variables
 
 Set the API keys for the providers you want to use:

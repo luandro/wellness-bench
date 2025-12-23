@@ -32,7 +32,12 @@ npm run benchmark:build  # Type-check benchmark scripts
 
 ## Benchmark Pipeline
 
-Benchmark configs and providers live in `benchmarks/`. Outputs are written to `benchmarks/results/` (gitignored). See `benchmarks/README.md` for provider setup and required API keys.
+Benchmark configs and providers live in `benchmarks/`. Outputs are written to `benchmarks/results/` (gitignored).
+
+See [`benchmarks/README.md`](benchmarks/README.md) for detailed instructions on:
+- Setting up the pipeline
+- **Obtaining and configuring API keys** (OpenAI, Anthropic, Google, xAI, DeepSeek)
+- Running the benchmark scripts
 
 ## Project Structure
 
