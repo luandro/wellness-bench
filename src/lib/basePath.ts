@@ -34,7 +34,7 @@ export function getBasePath(): string {
  * @param path - The path to the asset (should start with /)
  */
 export function getAssetUrl(path: string): string {
-  const basePath = getBasePath();
+  const basePath = getCachedBasePath();
   // Ensure path starts with /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${basePath}${normalizedPath}`;
@@ -83,11 +83,8 @@ export async function fetchResults<T>(relativePath: string): Promise<T> {
 }
 
 // Export a singleton for the current base path (computed once)
-let cachedBasePath: string | null = null;
+const cachedBasePath = getBasePath();
 
 export function getCachedBasePath(): string {
-  if (cachedBasePath === null) {
-    cachedBasePath = getBasePath();
-  }
   return cachedBasePath;
 }

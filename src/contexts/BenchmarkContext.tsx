@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import { fetchResults } from '@/lib/basePath';
 
 export interface BenchmarkRun {
@@ -86,6 +86,7 @@ function catalogEntryToRun(entry: RunsCatalogEntry, isLatest: boolean): Benchmar
 export function BenchmarkProvider({ children }: { children: ReactNode }) {
   const [runs, setRuns] = useState<BenchmarkRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const selectedRunIdRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [biasFilters, setBiasFilters] = useState<BiasFilters>({
@@ -94,6 +95,10 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
     techno: false,
     power: false,
   });
+
+  useEffect(() => {
+    selectedRunIdRef.current = selectedRunId;
+  }, [selectedRunId]);
 
   /**
    * Load runs from static JSON catalog
@@ -112,27 +117,32 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
         setRuns(benchmarkRuns);
 
         // Select the first (latest) run by default
-        if (!selectedRunId && benchmarkRuns.length > 0) {
+        const currentSelection = selectedRunIdRef.current;
+        const hasSelection = currentSelection
+          ? benchmarkRuns.some((run) => run.id === currentSelection)
+          : false;
+        if (!hasSelection && benchmarkRuns.length > 0) {
           setSelectedRunId(benchmarkRuns[0].id);
         }
       } else {
         // No runs in catalog, use mock data
         setRuns(mockRuns);
-        if (!selectedRunId) {
+        if (!selectedRunIdRef.current) {
           setSelectedRunId(mockRuns[0].id);
         }
       }
     } catch (err) {
       console.warn('Failed to load runs catalog, using mock data:', err);
+      setError(err instanceof Error ? err.message : String(err));
       // Fall back to mock data
       setRuns(mockRuns);
-      if (!selectedRunId) {
+      if (!selectedRunIdRef.current) {
         setSelectedRunId(mockRuns[0].id);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [selectedRunId]);
+  }, []);
 
   // Load runs on mount
   useEffect(() => {
@@ -140,8 +150,10 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
   }, [loadRuns]);
 
   const selectedRun = useMemo(() => {
-    if (!selectedRunId) return runs[0] || null;
-    return runs.find(r => r.id === selectedRunId) || runs[0] || null;
+    if (selectedRunId) {
+      return runs.find(r => r.id === selectedRunId) || null;
+    }
+    return runs[0] || null;
   }, [runs, selectedRunId]);
 
   const toggleBiasFilter = useCallback((key: keyof BiasFilters) => {
