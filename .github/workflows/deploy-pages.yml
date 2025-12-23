@@ -1,23 +1,15 @@
-# GitHub Pages Deployment Workflow
-# Copy this file to .github/workflows/deploy-pages.yml to enable
-
 name: Deploy to GitHub Pages
 
 on:
-  # Run on push to main branch
   push:
     branches: [main]
-
-  # Allow manual trigger
   workflow_dispatch:
 
-# Sets permissions for GITHUB_TOKEN for Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -34,33 +26,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json', '**/bun.lockb') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          node-version: "20"
+          cache: npm
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Build site
-        run: pnpm run build
+        run: npm run build
         env:
-          # Set viewer mode for production build
           VITE_APP_MODE: viewer
 
       - name: Add .nojekyll file
@@ -68,7 +42,6 @@ jobs:
 
       - name: Copy benchmark results to dist
         run: |
-          # Copy results directory if it exists
           if [ -d "benchmarks/results" ]; then
             mkdir -p dist/benchmarks/results
             cp -r benchmarks/results/* dist/benchmarks/results/ 2>/dev/null || true
