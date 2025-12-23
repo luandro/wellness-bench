@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://wellness-bench.github.io/schemas/run_index.schema.json",
+  "title": "Run Index",
+  "description": "Index file for a benchmark run result bundle",
+  "type": "object",
+  "required": [
+    "run_id",
+    "run_name",
+    "created_at",
+    "languages_available",
+    "models_included",
+    "question_ids",
+    "file_map"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Unique run identifier"
+    },
+    "run_name": {
+      "type": "string",
+      "description": "Human-readable run name"
+    },
+    "run_description": {
+      "type": "string",
+      "description": "Optional run description"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of run creation"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of run completion"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$",
+      "description": "Git commit SHA of the repository at run time"
+    },
+    "languages_available": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Language codes available in this run"
+    },
+    "models_included": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["provider_id", "model_id", "display_name"],
+        "properties": {
+          "provider_id": { "type": "string" },
+          "model_id": { "type": "string" },
+          "display_name": { "type": "string" },
+          "version": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "description": "Models included in this run"
+    },
+    "question_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Question IDs included in this run"
+    },
+    "file_map": {
+      "type": "object",
+      "required": ["snapshots", "per_question", "per_model"],
+      "properties": {
+        "snapshots": {
+          "type": "object",
+          "required": ["questions", "eval_prompts", "providers"],
+          "properties": {
+            "questions": { "type": "string" },
+            "eval_prompts": { "type": "string" },
+            "providers": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "per_question": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of question_id to file path"
+        },
+        "per_model": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "description": "Map of question_id -> provider__model -> file path"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "total_questions": { "type": "integer" },
+        "total_models": { "type": "integer" },
+        "total_evaluations": { "type": "integer" },
+        "succeeded": { "type": "integer" },
+        "failed": { "type": "integer" },
+        "total_duration_ms": { "type": "integer" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

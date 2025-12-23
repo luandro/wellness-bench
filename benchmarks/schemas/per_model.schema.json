@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://wellness-bench.github.io/schemas/per_model.schema.json",
+  "title": "Per-Model Result",
+  "description": "Detailed result for a single model's response to a question",
+  "type": "object",
+  "required": [
+    "question_id",
+    "provider_id",
+    "model_id",
+    "status",
+    "raw_answer",
+    "evaluations",
+    "display_blocks",
+    "metadata"
+  ],
+  "properties": {
+    "question_id": { "type": "string" },
+    "provider_id": { "type": "string" },
+    "model_id": { "type": "string" },
+    "display_name": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed", "partial"]
+    },
+    "error": { "type": "string" },
+    "raw_answer": {
+      "type": "string",
+      "description": "The model's original response (in original generation language)"
+    },
+    "evaluations": {
+      "type": "object",
+      "description": "Evaluation step outputs (A-E)",
+      "properties": {
+        "step_a": {
+          "type": "object",
+          "description": "Structured Decomposition output"
+        },
+        "step_b": {
+          "type": "object",
+          "description": "Bias & Assumption Detection output"
+        },
+        "step_c": {
+          "type": "object",
+          "description": "Buen Vivir Alignment output"
+        },
+        "step_d": {
+          "type": "object",
+          "description": "Coherence & Realism output"
+        },
+        "step_e": {
+          "type": "object",
+          "description": "Epistemic Humility output"
+        }
+      },
+      "additionalProperties": false
+    },
+    "extracted_quotes": {
+      "type": "object",
+      "description": "Quotes organized by bias type for UI highlighting",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "display_blocks": {
+      "type": "object",
+      "description": "Normalized blocks for viewer UI, per language",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "summary": { "type": "string" },
+          "answer_preview": { "type": "string" },
+          "decomposition": {
+            "type": "object",
+            "properties": {
+              "wellbeing_definition": { "type": "string" },
+              "main_problems": { "type": "array", "items": { "type": "string" } },
+              "root_causes": { "type": "array", "items": { "type": "string" } },
+              "mechanisms_of_change": { "type": "array", "items": { "type": "string" } },
+              "notable_omissions": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "bias_analysis": {
+            "type": "object",
+            "properties": {
+              "detected_biases": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "label": { "type": "string" },
+                    "explanation": { "type": "string" },
+                    "evidence_quotes": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              },
+              "overall_summary": { "type": "string" }
+            }
+          },
+          "buen_vivir": {
+            "type": "object",
+            "properties": {
+              "score": { "type": "number" },
+              "alignment_areas": { "type": "array", "items": { "type": "string" } },
+              "tensions": { "type": "array", "items": { "type": "string" } },
+              "explanation": { "type": "string" }
+            }
+          },
+          "coherence": {
+            "type": "object",
+            "properties": {
+              "score": { "type": "number" },
+              "tradeoffs_acknowledged": { "type": "boolean" },
+              "enforcement_mechanisms": { "type": "boolean" },
+              "notes": { "type": "array", "items": { "type": "string" } },
+              "explanation": { "type": "string" }
+            }
+          },
+          "epistemic_humility": {
+            "type": "object",
+            "properties": {
+              "score": { "type": "number" },
+              "uncertainty_acknowledged": { "type": "boolean" },
+              "evidence_for_change": { "type": "array", "items": { "type": "string" } },
+              "explanation": { "type": "string" }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "prompt_inputs": {
+      "type": "object",
+      "description": "Input prompts and parameters for reproducibility",
+      "properties": {
+        "question_text": { "type": "string" },
+        "system_prompt": { "type": "string" },
+        "model_params": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string" },
+        "latency_ms": { "type": "integer" },
+        "token_usage": {
+          "type": "object",
+          "properties": {
+            "prompt_tokens": { "type": "integer" },
+            "completion_tokens": { "type": "integer" },
+            "total_tokens": { "type": "integer" }
+          }
+        },
+        "evaluation_latencies": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

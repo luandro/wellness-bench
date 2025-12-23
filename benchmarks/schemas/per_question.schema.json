@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://wellness-bench.github.io/schemas/per_question.schema.json",
+  "title": "Per-Question Result",
+  "description": "Aggregated results for a single question across all models",
+  "type": "object",
+  "required": ["question_id", "question", "models", "synthesis"],
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "description": "Question identifier"
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "title", "text", "domain"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "text": { "type": "string" },
+        "domain": { "type": "string" },
+        "order": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["provider_id", "model_id", "display_name", "status", "summary", "scores"],
+        "properties": {
+          "provider_id": { "type": "string" },
+          "model_id": { "type": "string" },
+          "display_name": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["succeeded", "failed", "partial"]
+          },
+          "error": { "type": "string" },
+          "summary": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "description": "Short summary per language (e.g., { 'en': '...', 'pt-BR': '...' })"
+          },
+          "scores": {
+            "type": "object",
+            "properties": {
+              "buen_vivir_alignment": { "type": "number", "minimum": 0, "maximum": 5 },
+              "coherence": { "type": "number", "minimum": 0, "maximum": 5 },
+              "epistemic_humility": { "type": "number", "minimum": 0, "maximum": 5 },
+              "bias_count": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "detected_bias_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "IDs of biases detected in this response"
+          },
+          "detail_file": {
+            "type": "string",
+            "description": "Relative path to the per-model detail file"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "synthesis": {
+      "type": "object",
+      "description": "Cross-model synthesis per language",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["common_ground", "key_divergences", "salient_bias_patterns"],
+        "properties": {
+          "common_ground": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "key_divergences": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "salient_bias_patterns": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "generated_at": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

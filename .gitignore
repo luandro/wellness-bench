@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Benchmark output (keep docs)
+benchmarks/results/*
+!benchmarks/results/README.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

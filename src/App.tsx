@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import { AppProvider } from "@/contexts/AppContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
@@ -17,6 +17,12 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/**
+ * App uses HashRouter for GitHub Pages compatibility.
+ * Routes work correctly when hosted on:
+ * - GitHub Pages (https://<user>.github.io/<repo>/)
+ * - Custom domains (https://example.com/)
+ */
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AppProvider>
@@ -24,7 +30,7 @@ const App = () => (
         <ErrorBoundary>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <HashRouter>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/benchmark" element={<BenchmarkPage />} />
@@ -36,7 +42,7 @@ const App = () => (
               <Route path="/import-export" element={<ImportExportPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
+          </HashRouter>
         </ErrorBoundary>
       </TooltipProvider>
     </AppProvider>

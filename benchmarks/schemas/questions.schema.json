@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://wellness-bench.github.io/schemas/questions.schema.json",
+  "title": "Questions Configuration",
+  "description": "Configuration for benchmark questions",
+  "type": "object",
+  "required": ["version", "updated_at", "domains", "questions"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the configuration format"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last update"
+    },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Available question domain categories"
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "text", "domain", "order", "enabled"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Unique identifier for the question"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Short display title"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Full question text"
+          },
+          "domain": {
+            "type": "string",
+            "description": "Domain category (must match one of domains array)"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Display order (1-based)"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this question is active"
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional tags for filtering"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

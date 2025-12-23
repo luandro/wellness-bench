@@ -1,0 +1,224 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://wellness-bench.github.io/schemas/run_config.schema.json",
+  "title": "Run Configuration",
+  "description": "Configuration for a benchmark run",
+  "type": "object",
+  "required": ["run_name", "default_language", "enabled_languages"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Optional fixed run ID. If omitted, auto-generated from timestamp + hash."
+    },
+    "run_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Human-readable run name"
+    },
+    "run_description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Optional description of this run's purpose"
+    },
+    "default_language": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "default": "en",
+      "description": "Default language code (e.g., 'en', 'pt-BR')"
+    },
+    "enabled_languages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Languages to generate translations for"
+    },
+    "question_selection": {
+      "type": "object",
+      "description": "Question filtering options",
+      "properties": {
+        "question_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Explicit list of question IDs to include"
+        },
+        "domains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Filter by domain categories"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Filter by tags (OR logic)"
+        },
+        "include_disabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include questions with enabled=false"
+        }
+      },
+      "additionalProperties": false
+    },
+    "provider_selection": {
+      "type": "object",
+      "description": "Provider/model filtering options",
+      "properties": {
+        "provider_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Explicit list of provider IDs to include"
+        },
+        "model_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Explicit list of model IDs to include (across all providers)"
+        },
+        "include_disabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include providers/models with enabled=false"
+        }
+      },
+      "additionalProperties": false
+    },
+    "generation_params": {
+      "type": "object",
+      "description": "Override default generation parameters",
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 128000
+        }
+      },
+      "additionalProperties": true
+    },
+    "evaluation_params": {
+      "type": "object",
+      "description": "Parameters for evaluation steps",
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.3,
+          "description": "Lower temperature for more deterministic evaluations"
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 8000,
+          "default": 2000
+        },
+        "evaluator_model": {
+          "type": "string",
+          "description": "Optional specific model to use for evaluations (e.g., 'gpt-4o')"
+        },
+        "evaluator_provider": {
+          "type": "string",
+          "description": "Provider for evaluator model"
+        }
+      },
+      "additionalProperties": false
+    },
+    "synthesis": {
+      "type": "object",
+      "description": "Synthesis generation options",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "model": {
+          "type": "string",
+          "description": "Model to use for synthesis"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Provider for synthesis model"
+        }
+      },
+      "additionalProperties": false
+    },
+    "translation": {
+      "type": "object",
+      "description": "Translation options",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "model": {
+          "type": "string",
+          "description": "Model to use for translations"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Provider for translation model"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5,
+          "default": 0.1,
+          "description": "Low temperature for consistent translations"
+        }
+      },
+      "additionalProperties": false
+    },
+    "concurrency": {
+      "type": "object",
+      "description": "Concurrency and rate limiting",
+      "properties": {
+        "max_concurrent_requests": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 3,
+          "description": "Maximum concurrent API requests"
+        },
+        "per_provider_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 2,
+          "description": "Maximum concurrent requests per provider"
+        },
+        "retry_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 3
+        },
+        "retry_delay_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 30000,
+          "default": 1000,
+          "description": "Base delay between retries (exponential backoff)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "output_dir": {
+      "type": "string",
+      "default": "benchmarks/results",
+      "description": "Output directory for results (relative to repo root)"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,218 @@
+name: Run Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_config_path:
+        description: 'Path to run configuration file (relative to repo root)'
+        required: false
+        default: 'benchmarks/config/run_config.json'
+        type: string
+      run_name:
+        description: 'Custom name for this benchmark run'
+        required: false
+        type: string
+      providers:
+        description: 'Comma-separated list of providers to run (leave empty for all enabled)'
+        required: false
+        type: string
+      commit_results:
+        description: 'Commit results to repository'
+        required: false
+        default: false
+        type: boolean
+      create_pr:
+        description: 'Create a pull request with results (only if commit_results is true)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  run-benchmark:
+    name: Run Benchmark Pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required secrets
+        id: validate-secrets
+        run: |
+          MISSING_SECRETS=""
+
+          # Check which providers are requested
+          PROVIDERS="${{ inputs.providers }}"
+
+          # If no specific providers, check based on run config
+          if [ -z "$PROVIDERS" ]; then
+            # Check all provider secrets
+            [ -z "$OPENAI_API_KEY" ] && MISSING_SECRETS="$MISSING_SECRETS OPENAI_API_KEY"
+            [ -z "$ANTHROPIC_API_KEY" ] && MISSING_SECRETS="$MISSING_SECRETS ANTHROPIC_API_KEY"
+            [ -z "$GOOGLE_API_KEY" ] && MISSING_SECRETS="$MISSING_SECRETS GOOGLE_API_KEY"
+            [ -z "$XAI_API_KEY" ] && MISSING_SECRETS="$MISSING_SECRETS XAI_API_KEY"
+            [ -z "$DEEPSEEK_API_KEY" ] && MISSING_SECRETS="$MISSING_SECRETS DEEPSEEK_API_KEY"
+          else
+            # Check only requested providers
+            if [[ "$PROVIDERS" == *"openai"* ]] && [ -z "$OPENAI_API_KEY" ]; then
+              MISSING_SECRETS="$MISSING_SECRETS OPENAI_API_KEY"
+            fi
+            if [[ "$PROVIDERS" == *"anthropic"* ]] && [ -z "$ANTHROPIC_API_KEY" ]; then
+              MISSING_SECRETS="$MISSING_SECRETS ANTHROPIC_API_KEY"
+            fi
+            if [[ "$PROVIDERS" == *"google"* ]] && [ -z "$GOOGLE_API_KEY" ]; then
+              MISSING_SECRETS="$MISSING_SECRETS GOOGLE_API_KEY"
+            fi
+            if [[ "$PROVIDERS" == *"grok"* ]] && [ -z "$XAI_API_KEY" ]; then
+              MISSING_SECRETS="$MISSING_SECRETS XAI_API_KEY"
+            fi
+            if [[ "$PROVIDERS" == *"deepseek"* ]] && [ -z "$DEEPSEEK_API_KEY" ]; then
+              MISSING_SECRETS="$MISSING_SECRETS DEEPSEEK_API_KEY"
+            fi
+          fi
+
+          if [ -n "$MISSING_SECRETS" ]; then
+            echo "::error::Missing required secrets:$MISSING_SECRETS"
+            echo "Please add the missing secrets to your repository settings."
+            exit 1
+          fi
+
+          echo "All required secrets are available."
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Run benchmark
+        id: benchmark
+        run: |
+          # Build command
+          CMD="npm run benchmark"
+
+          if [ -n "${{ inputs.run_config_path }}" ]; then
+            CMD="$CMD -- --runConfig ${{ inputs.run_config_path }}"
+          fi
+
+          if [ -n "${{ inputs.providers }}" ]; then
+            CMD="$CMD --providers ${{ inputs.providers }}"
+          fi
+
+          CMD="$CMD --verbose"
+
+          echo "Running: $CMD"
+          $CMD
+
+          if [ ! -d "benchmarks/results" ] || [ -z "$(ls -A benchmarks/results 2>/dev/null)" ]; then
+            echo "::error::No benchmark results found in benchmarks/results directory"
+            exit 1
+          fi
+
+          # Extract run ID from latest run directory
+          RUN_ID=$(ls -1dt benchmarks/results/*/ | head -1 | xargs basename)
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "Benchmark run ID: $RUN_ID"
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ steps.benchmark.outputs.run_id }}
+          path: |
+            benchmarks/results/${{ steps.benchmark.outputs.run_id }}/
+            benchmarks/results/runs.json
+          retention-days: 90
+
+      - name: Commit results
+        if: ${{ inputs.commit_results && !inputs.create_pr }}
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          git add benchmarks/results/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          RUN_ID="${{ steps.benchmark.outputs.run_id }}"
+          RUN_NAME="${{ inputs.run_name || 'Benchmark Run' }}"
+
+          git commit -m "$(cat <<EOF
+          Add benchmark results: $RUN_NAME
+
+          Run ID: $RUN_ID
+          Triggered by: ${{ github.actor }}
+          EOF
+          )"
+
+          git push origin ${{ github.ref_name }}
+
+      - name: Create Pull Request
+        if: ${{ inputs.commit_results && inputs.create_pr }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'Add benchmark results: ${{ inputs.run_name || steps.benchmark.outputs.run_id }}'
+          title: 'Benchmark Results: ${{ inputs.run_name || steps.benchmark.outputs.run_id }}'
+          body: |
+            ## Benchmark Results
+
+            This PR adds results from a benchmark run.
+
+            **Run Details:**
+            - Run ID: `${{ steps.benchmark.outputs.run_id }}`
+            - Triggered by: @${{ github.actor }}
+            - Run Config: `${{ inputs.run_config_path }}`
+            - Providers: ${{ inputs.providers || 'all enabled' }}
+
+            **Files:**
+            - `benchmarks/results/${{ steps.benchmark.outputs.run_id }}/` - Full results bundle
+            - `benchmarks/results/runs.json` - Updated runs catalog
+
+            ---
+            *This PR was automatically generated by the benchmark workflow.*
+          branch: benchmark-results/${{ steps.benchmark.outputs.run_id }}
+          delete-branch: true
+          labels: |
+            benchmark
+            automated
+
+      - name: Summary
+        run: |
+          echo "## Benchmark Run Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** \`${{ steps.benchmark.outputs.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Results" >> $GITHUB_STEP_SUMMARY
+          echo "Results have been uploaded as an artifact." >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.commit_results }}" == "true" ]; then
+            if [ "${{ inputs.create_pr }}" == "true" ]; then
+              echo "A pull request has been created with the results." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Results have been committed to the repository." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
