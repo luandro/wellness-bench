@@ -30,13 +30,16 @@
             "type": "string",
             "enum": ["completed", "failed", "partial"]
           },
-          "git_sha": { "type": "string" },
+          "git_sha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
           "languages": {
             "type": "array",
             "items": { "type": "string" }
           },
-          "question_count": { "type": "integer" },
-          "model_count": { "type": "integer" },
+          "question_count": { "type": "integer", "minimum": 0 },
+          "model_count": { "type": "integer", "minimum": 0 },
           "path": {
             "type": "string",
             "description": "Relative path to run directory"

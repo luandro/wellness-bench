@@ -19,7 +19,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["provider_id", "display_name", "enabled", "auth_type", "env_key_name", "models"],
+        "required": ["provider_id", "display_name", "enabled", "base_url", "auth_type", "env_key_name", "models"],
         "properties": {
           "provider_id": {
             "type": "string",
