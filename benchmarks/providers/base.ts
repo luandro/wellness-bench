@@ -167,6 +167,34 @@ export function parseJsonResponse(text: string): unknown {
 }
 
 /**
+ * Sanitize API error messages to prevent leaking sensitive information.
+ * Extracts only the HTTP status code and a generic error category.
+ */
+export function sanitizeApiError(status: number, rawError: string): string {
+  // Map status codes to generic categories
+  const statusMessages: Record<number, string> = {
+    400: 'Bad request - check your input parameters',
+    401: 'Authentication failed - check your API key',
+    403: 'Access denied - your API key may lack required permissions',
+    404: 'Resource not found - check the model name',
+    429: 'Rate limit exceeded - please slow down requests',
+    500: 'Server error - the API service is experiencing issues',
+    502: 'Bad gateway - the API service is temporarily unavailable',
+    503: 'Service unavailable - the API service is overloaded',
+    504: 'Gateway timeout - the request took too long',
+  };
+
+  const genericMessage = statusMessages[status] || `Request failed with status ${status}`;
+
+  // Log the full error for debugging (but don't expose to user)
+  if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
+    console.debug(`[API Error ${status}] Full response:`, rawError.slice(0, 500));
+  }
+
+  return genericMessage;
+}
+
+/**
  * Abstract base class for provider adapters
  */
 export abstract class BaseProviderAdapter implements ProviderAdapter {
@@ -215,11 +243,3 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
   }
 }
 
-/**
- * Create a provider adapter from a config
- */
-export function createProviderAdapter(config: ProviderConfig): ProviderAdapter | null {
-  // This function is implemented in the registry
-  // Importing here would cause circular dependencies
-  throw new Error('Use createAdapter from registry.ts instead');
-}

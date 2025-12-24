@@ -19,16 +19,34 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Key, Eye, EyeOff, Trash2, Plus, AlertTriangle, Check, X } from 'lucide-react';
+import { Key, Eye, EyeOff, Trash2, Plus, AlertTriangle, Check, X, Lock, Unlock, ShieldAlert } from 'lucide-react';
 
 export default function ApiKeysPage() {
-  const { providers, storedKeys, setApiKey, removeApiKey, hasEnvKeys, mode } = useApp();
+  const {
+    providers,
+    storedKeys,
+    setApiKey,
+    removeApiKey,
+    hasEnvKeys,
+    mode,
+    isVaultSetUp,
+    isVaultUnlocked,
+    unlockVault,
+    lockVault,
+    resetVault,
+  } = useApp();
   const { toast } = useToast();
-  
+
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Vault passphrase state
+  const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [showPassphrase, setShowPassphrase] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
 
   // This page should not be shown if env keys exist or in viewer mode
   if (hasEnvKeys || mode === 'viewer') {
@@ -43,8 +61,8 @@ export default function ApiKeysPage() {
             <CardContent className="py-8 text-center">
               <Key className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {hasEnvKeys 
-                  ? "API keys are configured via environment variables." 
+                {hasEnvKeys
+                  ? "API keys are configured via environment variables."
                   : "API keys are not available in Viewer mode."}
               </p>
             </CardContent>
@@ -53,6 +71,65 @@ export default function ApiKeysPage() {
       </MainLayout>
     );
   }
+
+  const handleUnlockVault = async () => {
+    if (!passphrase) {
+      toast({
+        title: "Passphrase Required",
+        description: "Please enter a passphrase.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // For first-time setup, require confirmation
+    if (!isVaultSetUp) {
+      if (passphrase.length < 8) {
+        toast({
+          title: "Passphrase Too Short",
+          description: "Passphrase must be at least 8 characters.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (passphrase !== confirmPassphrase) {
+        toast({
+          title: "Passphrases Don't Match",
+          description: "Please make sure both passphrases match.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setIsUnlocking(true);
+    try {
+      const success = await unlockVault(passphrase);
+      if (success) {
+        setPassphrase('');
+        setConfirmPassphrase('');
+        toast({
+          title: isVaultSetUp ? "Vault Unlocked" : "Vault Created",
+          description: isVaultSetUp
+            ? "You can now manage your API keys."
+            : "Your vault has been created. You can now add API keys.",
+        });
+      }
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handleLockVault = () => {
+    lockVault();
+    setEditingProvider(null);
+    setKeyInput('');
+    toast({
+      title: "Vault Locked",
+      description: "Your API keys are now protected.",
+    });
+  };
 
   const handleSaveKey = async (providerId: string) => {
     if (!keyInput.trim()) {
@@ -73,12 +150,13 @@ export default function ApiKeysPage() {
 
       toast({
         title: "API Key Saved",
-        description: "Key has been encrypted and stored in browser storage.",
+        description: "Key has been encrypted and stored securely.",
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to encrypt and save the API key.";
       toast({
         title: "Error Saving Key",
-        description: "Failed to encrypt and save the API key.",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -98,6 +176,122 @@ export default function ApiKeysPage() {
     return storedKeys.find(k => k.provider_id === providerId);
   };
 
+  // Render vault unlock/setup UI
+  if (!isVaultUnlocked) {
+    return (
+      <MainLayout>
+        <div className="p-8 max-w-4xl mx-auto">
+          <PageHeader
+            title="API Keys & Providers"
+            description="Configure API keys for LLM providers. Keys are protected with a passphrase."
+          />
+
+          <Card className="card-elevated max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Lock className="w-8 h-8 text-primary" />
+              </div>
+              <CardTitle>
+                {isVaultSetUp ? "Unlock Your Vault" : "Create Your Vault"}
+              </CardTitle>
+              <CardDescription>
+                {isVaultSetUp
+                  ? "Enter your passphrase to access your stored API keys."
+                  : "Create a passphrase to securely store your API keys. Choose a strong passphrase you'll remember."}
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Passphrase</label>
+                <div className="relative">
+                  <Input
+                    type={showPassphrase ? 'text' : 'password'}
+                    value={passphrase}
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    placeholder="Enter your passphrase..."
+                    className="pr-10"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && isVaultSetUp) {
+                        handleUnlockVault();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassphrase(!showPassphrase)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassphrase ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {!isVaultSetUp && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Confirm Passphrase</label>
+                  <Input
+                    type={showPassphrase ? 'text' : 'password'}
+                    value={confirmPassphrase}
+                    onChange={(e) => setConfirmPassphrase(e.target.value)}
+                    placeholder="Confirm your passphrase..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleUnlockVault();
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
+              <Button
+                className="w-full"
+                onClick={handleUnlockVault}
+                disabled={isUnlocking}
+              >
+                <Unlock className="w-4 h-4 mr-2" />
+                {isUnlocking ? 'Processing...' : isVaultSetUp ? 'Unlock Vault' : 'Create Vault'}
+              </Button>
+
+              {isVaultSetUp && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" className="w-full text-destructive hover:text-destructive">
+                      <ShieldAlert className="w-4 h-4 mr-2" />
+                      Forgot Passphrase? Reset Vault
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Reset Vault</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete all stored API keys. You cannot undo this action.
+                        You will need to re-enter all your API keys after setting a new passphrase.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={resetVault}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Reset Vault
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+
+              <div className="text-xs text-muted-foreground text-center pt-2">
+                <p>Your passphrase is never stored. Keep it safe!</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <MainLayout>
       <div className="p-8 max-w-4xl mx-auto">
@@ -105,6 +299,14 @@ export default function ApiKeysPage() {
           title="API Keys & Providers"
           description="Configure API keys for LLM providers. Keys are stored locally in your browser."
         />
+
+        {/* Vault Status & Lock Button */}
+        <div className="flex justify-end mb-4">
+          <Button variant="outline" size="sm" onClick={handleLockVault}>
+            <Lock className="w-4 h-4 mr-2" />
+            Lock Vault
+          </Button>
+        </div>
 
         {/* Security Warning */}
         <Card className="mb-6 border-warning/30 bg-warning/5">
@@ -114,8 +316,8 @@ export default function ApiKeysPage() {
               <div className="text-sm">
                 <p className="font-medium text-foreground mb-1">Security Notice</p>
                 <p className="text-muted-foreground">
-                  API keys stored in browser storage can be exposed through browser extensions or XSS attacks. 
-                  Use limited-scope keys when possible. For production use, configure keys via environment variables.
+                  API keys are encrypted with your passphrase before storage.
+                  For maximum security, use limited-scope keys and consider environment variables for production.
                 </p>
               </div>
             </div>
@@ -149,7 +351,7 @@ export default function ApiKeysPage() {
                     )}
                   </div>
                 </CardHeader>
-                
+
                 <CardContent>
                   {isEditing ? (
                     <div className="space-y-3">
@@ -235,7 +437,7 @@ export default function ApiKeysPage() {
                       </AlertDialog>
                     </div>
                   ) : (
-                    <Button 
+                    <Button
                       size="sm"
                       onClick={() => setEditingProvider(provider.provider_id)}
                     >
@@ -253,7 +455,7 @@ export default function ApiKeysPage() {
         <Card className="mt-6 border-border/50">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">
-              <strong>Note:</strong> Custom base URLs can be configured on the Providers page. 
+              <strong>Note:</strong> Custom base URLs can be configured on the Providers page.
               This is useful for using proxies or alternative API endpoints.
             </p>
           </CardContent>

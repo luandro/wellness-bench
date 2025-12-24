@@ -485,11 +485,36 @@ export async function translateResults(
     maxRetries?: number;
     baseDelayMs?: number;
     maxDelayMs?: number;
-  }
+  },
+  concurrentTranslations: number = 3
 ): Promise<{
   translatedSyntheses: SynthesisResult[];
 }> {
   const translatedSyntheses: SynthesisResult[] = [...syntheses];
+
+  // Rate limiter to prevent overwhelming the API
+  const translationLimit = pLimit(concurrentTranslations);
+
+  /**
+   * Helper to translate an array of texts with rate limiting
+   */
+  async function translateArray(texts: string[], targetLang: string): Promise<string[]> {
+    const tasks = texts.map((text) =>
+      translationLimit(() =>
+        translateText(
+          adapter,
+          modelId,
+          text,
+          sourceLanguage,
+          targetLang,
+          translationTemplate,
+          { temperature },
+          retryOptions
+        )
+      )
+    );
+    return Promise.all(tasks);
+  }
 
   // Translate syntheses to each target language
   for (const synthesis of syntheses) {
@@ -497,50 +522,20 @@ export async function translateResults(
       if (targetLang === sourceLanguage) continue;
 
       try {
-        // Translate each array field
-        const translatedCommonGround = await Promise.all(
-          (synthesis.common_ground || []).map((text) =>
-            translateText(
-              adapter,
-              modelId,
-              text,
-              sourceLanguage,
-              targetLang,
-              translationTemplate,
-              { temperature },
-              retryOptions
-            )
-          )
+        // Translate each array field with rate limiting
+        const translatedCommonGround = await translateArray(
+          synthesis.common_ground || [],
+          targetLang
         );
 
-        const translatedDivergences = await Promise.all(
-          (synthesis.key_divergences || []).map((text) =>
-            translateText(
-              adapter,
-              modelId,
-              text,
-              sourceLanguage,
-              targetLang,
-              translationTemplate,
-              { temperature },
-              retryOptions
-            )
-          )
+        const translatedDivergences = await translateArray(
+          synthesis.key_divergences || [],
+          targetLang
         );
 
-        const translatedPatterns = await Promise.all(
-          (synthesis.salient_bias_patterns || []).map((text) =>
-            translateText(
-              adapter,
-              modelId,
-              text,
-              sourceLanguage,
-              targetLang,
-              translationTemplate,
-              { temperature },
-              retryOptions
-            )
-          )
+        const translatedPatterns = await translateArray(
+          synthesis.salient_bias_patterns || [],
+          targetLang
         );
 
         translatedSyntheses.push({

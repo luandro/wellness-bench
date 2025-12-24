@@ -118,12 +118,20 @@ export default function ImportExportPage() {
         'Raw Answer'
       ];
 
-      const rows = completedRuns.flatMap(run => 
+      const rows = completedRuns.flatMap(run =>
         run.items.map(item => {
           if (!item.result) return null;
-          
+
           const provider = providers.providers.find(p => p.provider_id === item.provider_id);
-          
+
+          // Safely extract values with null checks for all step outputs
+          const wellbeingDef = item.result.step_a?.wellbeing_definition || '';
+          const mainProblems = item.result.step_a?.main_problems || [];
+          const alignmentScore = item.result.step_c?.alignment_score_0_5 ?? 'N/A';
+          const coherenceScore = item.result.step_d?.coherence_score_0_5 ?? 'N/A';
+          const humilityScore = item.result.step_e?.humility_score_0_5 ?? 'N/A';
+          const detectedBiases = item.result.step_b?.detected_biases || [];
+
           return [
             run.id,
             run.name,
@@ -131,12 +139,12 @@ export default function ImportExportPage() {
             item.question_id,
             provider?.display_name || item.provider_id,
             item.model_id,
-            `"${(item.result.step_a.wellbeing_definition || '').replace(/"/g, '""')}"`,
-            `"${(item.result.step_a.main_problems || []).join('; ').replace(/"/g, '""')}"`,
-            item.result.step_c.alignment_score_0_5,
-            item.result.step_d.coherence_score_0_5,
-            item.result.step_e.humility_score_0_5,
-            `"${(item.result.step_b.detected_biases || []).map(b => b.label).join('; ').replace(/"/g, '""')}"`,
+            `"${wellbeingDef.replace(/"/g, '""')}"`,
+            `"${mainProblems.join('; ').replace(/"/g, '""')}"`,
+            alignmentScore,
+            coherenceScore,
+            humilityScore,
+            `"${detectedBiases.map(b => b.label).join('; ').replace(/"/g, '""')}"`,
             `"${(item.result.raw_answer || '').replace(/"/g, '""')}"`
           ].join(',');
         })
