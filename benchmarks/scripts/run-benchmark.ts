@@ -12,6 +12,7 @@
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseArgs } from 'util';
+import { existsSync } from 'fs';
 import {
   loadAllConfigs,
   getDefaultConfigDir,
@@ -33,12 +34,26 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Load .env file if it exists
+const envPath = resolve(__dirname, '../../.env');
+if (existsSync(envPath)) {
+  try {
+    // @ts-ignore - loadEnvFile is available in Node 20.12+
+    if (typeof process.loadEnvFile === 'function') {
+      process.loadEnvFile(envPath);
+    }
+  } catch (e) {
+    // Ignore errors loading .env
+  }
+}
+
 interface CliOptions {
   runConfig?: string;
   configDir?: string;
   dryRun: boolean;
   verbose: boolean;
   providers?: string;
+  models?: string;
   questions?: string;
   help: boolean;
 }
@@ -56,6 +71,7 @@ Options:
   --dryRun              Print run plan without executing
   --verbose             Enable verbose logging
   --providers <list>    Comma-separated list of providers to run
+  --models <list>       Comma-separated list of model IDs to run
   --questions <list>    Comma-separated list of question IDs to run
   --help                Show this help message
 
@@ -65,9 +81,9 @@ Environment Variables:
   GOOGLE_API_KEY        Google/Gemini API key
   XAI_API_KEY           xAI/Grok API key
   DEEPSEEK_API_KEY      DeepSeek API key
+  OPENROUTER_API_KEY    OpenRouter API key (can be used as fallback for all others)
 
-Examples:
-  # Run with default config
+Examples:  # Run with default config
   pnpm run benchmark
 
   # Run with custom config
@@ -89,6 +105,7 @@ function parseCliArgs(): CliOptions {
       dryRun: { type: 'boolean', default: false },
       verbose: { type: 'boolean', default: false },
       providers: { type: 'string' },
+      models: { type: 'string' },
       questions: { type: 'string' },
       help: { type: 'boolean', default: false },
     },
@@ -101,6 +118,7 @@ function parseCliArgs(): CliOptions {
     dryRun: values.dryRun ?? false,
     verbose: values.verbose ?? false,
     providers: values.providers,
+    models: values.models,
     questions: values.questions,
     help: values.help ?? false,
   };
@@ -171,6 +189,17 @@ async function main(): Promise<void> {
       configs.runConfig.question_selection = {
         ...configs.runConfig.question_selection,
         question_ids: questionIds,
+      };
+    }
+
+    if (options.models) {
+      const modelIds = options.models
+        .split(',')
+        .map((m) => m.trim())
+        .filter(Boolean);
+      configs.runConfig.provider_selection = {
+        ...configs.runConfig.provider_selection,
+        model_ids: modelIds,
       };
     }
 

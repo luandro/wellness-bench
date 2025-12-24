@@ -9,6 +9,7 @@ import { AnthropicAdapter } from './anthropic.js';
 import { GoogleGeminiAdapter } from './google.js';
 import { GrokAdapter } from './grok.js';
 import { DeepSeekAdapter } from './deepseek.js';
+import { OpenRouterAdapter, OpenRouterProxyAdapter } from './openrouter.js';
 
 type AdapterConstructor = new (config: ProviderConfig) => ProviderAdapter;
 
@@ -18,6 +19,7 @@ const ADAPTER_REGISTRY: Record<string, AdapterConstructor> = {
   google: GoogleGeminiAdapter,
   grok: GrokAdapter,
   deepseek: DeepSeekAdapter,
+  openrouter: OpenRouterAdapter,
 };
 
 /**
@@ -56,6 +58,9 @@ export function createAvailableAdapters(
   const adapters = new Map<string, ProviderAdapter>();
   const missingKeys: string[] = [];
 
+  const openRouterConfig = configs.find((c) => c.provider_id === 'openrouter');
+  const openRouterKey = openRouterConfig ? process.env[openRouterConfig.env_key_name] : process.env.OPENROUTER_API_KEY;
+
   for (const config of configs) {
     // Skip if filtered out
     if (options.filterProviders && !options.filterProviders.includes(config.provider_id)) {
@@ -72,6 +77,19 @@ export function createAvailableAdapters(
 
     if (adapter.isAvailable()) {
       adapters.set(config.provider_id, adapter);
+    } else if (openRouterKey && config.provider_id !== 'openrouter') {
+      // Use OpenRouter as fallback for other providers
+      const orConfig = openRouterConfig || {
+        provider_id: 'openrouter',
+        display_name: 'OpenRouter',
+        enabled: true,
+        auth_type: 'bearer',
+        env_key_name: 'OPENROUTER_API_KEY',
+        models: [],
+      };
+      const orAdapter = new OpenRouterAdapter(orConfig as ProviderConfig);
+      adapters.set(config.provider_id, new OpenRouterProxyAdapter(orAdapter, config.provider_id));
+      console.info(`Using OpenRouter as fallback for provider: ${config.provider_id}`);
     } else {
       missingKeys.push(`${config.provider_id} (${config.env_key_name})`);
     }
@@ -95,6 +113,8 @@ export function validateProviderKeys(
   requiredProviderIds: string[]
 ): { valid: boolean; missing: string[] } {
   const missing: string[] = [];
+  const openRouterConfig = configs.find((c) => c.provider_id === 'openrouter');
+  const openRouterKey = openRouterConfig ? process.env[openRouterConfig.env_key_name] : process.env.OPENROUTER_API_KEY;
 
   for (const providerId of requiredProviderIds) {
     const config = configs.find((c) => c.provider_id === providerId);
@@ -104,7 +124,7 @@ export function validateProviderKeys(
     }
 
     const apiKey = process.env[config.env_key_name];
-    if (!apiKey) {
+    if (!apiKey && !openRouterKey) {
       missing.push(`${providerId} (${config.env_key_name})`);
     }
   }

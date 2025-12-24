@@ -4,6 +4,7 @@
 
 export const ANTHROPIC_VERSION = '2023-06-01';
 export const OPENAI_API_BASE = 'https://api.openai.com/v1';
+export const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
 export const ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';
 export const GOOGLE_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 export const GROK_API_BASE = 'https://api.x.ai/v1';
