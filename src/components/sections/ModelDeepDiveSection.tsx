@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Circle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RandomUnderline } from '../ui/random-underline';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Accordion,
   AccordionContent,
@@ -75,7 +76,7 @@ const BiasIndicator = ({ level, label }: { level: 0 | 1 | 2; label: string }) =>
 );
 
 export const ModelDeepDiveSection = () => {
-  const { runDetails } = useBenchmark();
+  const { runDetails, isLoading: isCatalogLoading } = useBenchmark();
   const [activeModelKey, setActiveModelKey] = useState<string | null>(null);
   const [modelDetails, setModelData] = useState<Record<string, PerModelResult>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -87,7 +88,11 @@ export const ModelDeepDiveSection = () => {
     if (!runDetails) return [];
 
     return runDetails.models_included.map(m => {
-      const key = `${m.provider_id}__${m.model_id}`;
+      // Key must match output-generator.ts: sanitizeId(provider)__sanitizeId(model)
+      const safeProviderId = m.provider_id.replace(/\//g, '__');
+      const safeModelId = m.model_id.replace(/\//g, '__');
+      const key = `${safeProviderId}__${safeModelId}`;
+      
       // Clean up name by removing (via OpenRouter) etc.
       const cleanName = m.display_name.split(' (')[0];
       
@@ -162,8 +167,6 @@ export const ModelDeepDiveSection = () => {
   const currentModelData = models.find((m) => m.id === activeModelKey);
   const currentDetails = activeModelKey ? modelDetails[activeModelKey] : null;
 
-  if (!runDetails || models.length === 0) return null;
-
   // Enhance model data with loaded details
   const displayModel = currentModelData ? {
     ...currentModelData,
@@ -184,14 +187,24 @@ export const ModelDeepDiveSection = () => {
     epistemicHumility: currentDetails?.evaluations?.step_e?.explanation,
   } : null;
 
-  if (isLoading && !currentDetails) {
+  if (isCatalogLoading || (isLoading && !currentDetails)) {
     return (
-      <div className="py-32 flex flex-col items-center justify-center">
-        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground font-medium">Loading model analysis...</p>
-      </div>
+      <section className="section-wide py-32 bg-muted/5">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <Skeleton className="h-12 w-64 mx-auto mb-4" />
+            <Skeleton className="h-6 w-full max-w-2xl mx-auto" />
+          </div>
+          <div className="flex justify-center gap-2 mb-12">
+            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-24 rounded-xl" />)}
+          </div>
+          <Skeleton className="h-96 w-full rounded-2xl" />
+        </div>
+      </section>
     );
   }
+
+  if (!runDetails || models.length === 0) return null;
 
   return (
     <section 
