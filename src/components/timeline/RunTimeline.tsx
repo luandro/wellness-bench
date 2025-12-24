@@ -82,20 +82,69 @@ export function RunTimeline() {
 export function RunContextHeader() {
   const { selectedRun, runDetails, isLoading } = useBenchmark();
 
-  const formatDate = (dateStr: string) => {
-...
   // Get model names from details if available (clean names)
+  // Hook must be called before early returns
   const modelsToDisplay = useMemo(() => {
     if (runDetails) {
       return runDetails.models_included.map(m => m.display_name.split(' (')[0]);
     }
-    // Fallback to selectedRun models (might be empty or from catalog)
-    return selectedRun.models.map(m => m.split(' (')[0]);
-  }, [runDetails, selectedRun.models]);
+    if (selectedRun) {
+      return selectedRun.models.map(m => m.split(' (')[0]);
+    }
+    return [];
+  }, [runDetails, selectedRun]);
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-4 px-6 bg-muted/30 rounded-2xl border border-border/30">
+        <span className="text-sm text-muted-foreground">Loading benchmark runs...</span>
+      </div>
+    );
+  }
+
+  if (!selectedRun) {
+    return (
+      <div className="flex items-center justify-center py-4 px-6 bg-muted/30 rounded-2xl border border-border/30">
+        <span className="text-sm text-muted-foreground">No benchmark runs available.</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 py-4 px-6 bg-muted/30 rounded-2xl border border-border/30">
-...
+      {/* Run name */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">Benchmark Run</span>
+        <span className="text-sm font-medium text-foreground">{selectedRun.name}</span>
+        {selectedRun.isLatest && (
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full">
+            Latest
+          </span>
+        )}
+      </div>
+      
+      {/* Divider */}
+      <div className="hidden sm:block w-px h-4 bg-border" />
+      
+      {/* Date */}
+      <div className="flex items-center gap-2">
+        <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">{formatDate(selectedRun.date)}</span>
+      </div>
+      
+      {/* Divider */}
+      <div className="hidden sm:block w-px h-4 bg-border" />
+      
       {/* Models */}
       <div className="flex items-center gap-2 flex-wrap justify-center">
         <span className="text-xs uppercase tracking-wider text-muted-foreground">Models</span>
