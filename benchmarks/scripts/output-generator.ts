@@ -46,9 +46,18 @@ function assertSafePathSegment(value: string, label: string): void {
   if (!value || value.trim().length === 0) {
     throw new Error(`Invalid ${label}: value is empty`);
   }
-  if (value.includes('/') || value.includes('\\') || value.includes('..')) {
+  // Allow forward slashes for OpenRouter model IDs (e.g. anthropic/claude-3),
+  // but they must be sanitized before being used as part of a filename.
+  if (value.includes('\\') || value.includes('..')) {
     throw new Error(`Invalid ${label}: "${value}" contains unsafe path characters`);
   }
+}
+
+/**
+ * Sanitize an ID for use in a filename
+ */
+function sanitizeId(id: string): string {
+  return id.replace(/\//g, '__');
 }
 
 /**
@@ -233,6 +242,7 @@ export async function generateOutputBundle(
 
   // Generate per-question and per-model files
   for (const question of plan.questions) {
+    const safeQuestionId = sanitizeId(question.id);
     const questionItems = itemsByQuestion.get(question.id) || [];
     const questionSyntheses = synthesesByQuestion.get(question.id) || new Map();
 
@@ -271,7 +281,7 @@ export async function generateOutputBundle(
     };
 
     // Create per-model directory for this question
-    const questionModelDir = resolve(perModelDir, question.id);
+    const questionModelDir = resolve(perModelDir, safeQuestionId);
     await ensureDir(questionModelDir);
     fileMap.per_model[question.id] = {};
 
@@ -282,9 +292,11 @@ export async function generateOutputBundle(
 
       if (!model) continue;
 
-      const modelFileName = `${item.provider_id}__${item.model_id}.json`;
+      const safeProviderId = sanitizeId(item.provider_id);
+      const safeModelId = sanitizeId(item.model_id);
+      const modelFileName = `${safeProviderId}__${safeModelId}.json`;
       const modelFilePath = resolve(questionModelDir, modelFileName);
-      const relativeModelPath = `per_model/${question.id}/${modelFileName}`;
+      const relativeModelPath = `per_model/${safeQuestionId}/${modelFileName}`;
 
       // Generate summary
       const summary = item.raw_answer && item.evaluations
@@ -333,7 +345,7 @@ export async function generateOutputBundle(
       };
 
       await writeJsonFile(modelFilePath, perModelResult);
-      fileMap.per_model[question.id][`${item.provider_id}__${item.model_id}`] = relativeModelPath;
+      fileMap.per_model[question.id][`${safeProviderId}__${safeModelId}`] = relativeModelPath;
 
       // Add to per-question summary
       perQuestionResult.models.push({
@@ -362,7 +374,7 @@ export async function generateOutputBundle(
     });
 
     // Write per-question file
-    const questionFileName = `${question.id}.json`;
+    const questionFileName = `${safeQuestionId}.json`;
     const questionFilePath = resolve(perQuestionDir, questionFileName);
     await writeJsonFile(questionFilePath, perQuestionResult);
     fileMap.per_question[question.id] = `per_question/${questionFileName}`;
