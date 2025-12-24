@@ -154,6 +154,57 @@ export interface SynthesisSummary {
   generated_at: string;
 }
 
+export interface PerQuestionModelSummary {
+  provider_id: string;
+  model_id: string;
+  display_name: string;
+  status: 'succeeded' | 'failed' | 'partial';
+  error?: string;
+  summary: Record<string, string>;
+  scores: {
+    buen_vivir_alignment?: number;
+    coherence?: number;
+    epistemic_humility?: number;
+    bias_count?: number;
+  };
+  detected_bias_ids: string[];
+  detail_file: string;
+}
+
+export interface PerQuestionResult {
+  question_id: string;
+  question: Question;
+  models: PerQuestionModelSummary[];
+  synthesis: Record<string, SynthesisSummary>;
+}
+
+export interface PerModelResult {
+  question_id: string;
+  provider_id: string;
+  model_id: string;
+  display_name: string;
+  status: 'succeeded' | 'failed' | 'partial';
+  error?: string;
+  raw_answer: string;
+  evaluations: {
+    step_a: StepAOutput | null;
+    step_b: StepBOutput | null;
+    step_c: StepCOutput | null;
+    step_d: StepDOutput | null;
+    step_e: StepEOutput | null;
+  };
+  extracted_quotes: Record<string, string[]>;
+  metadata: {
+    timestamp: string;
+    latency_ms: number;
+    token_usage?: {
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+    };
+  };
+}
+
 // Run
 export type RunItemStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 

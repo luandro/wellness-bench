@@ -5,19 +5,25 @@ import { Badge } from '@/components/ui/badge';
 import { ResultsOverview } from '@/components/results/ResultsOverview';
 import { QuestionResults } from '@/components/results/QuestionResults';
 import { useApp } from '@/contexts/AppContext';
+import { BenchmarkProvider, useBenchmark } from '@/contexts/BenchmarkContext';
 
-export default function ResultsPage() {
+function ResultsContent() {
   const { questions } = useApp();
+  const { runDetails, isLoadingDetails } = useBenchmark();
   const enabledQuestions = questions.questions.filter(q => q.enabled);
 
   return (
-    <MainLayout>
-      <div className="p-8 max-w-6xl mx-auto">
-        <PageHeader
-          title="Results"
-          description="Explore evaluation results and compare model responses."
-        />
+    <div className="p-8 max-w-6xl mx-auto">
+      <PageHeader
+        title="Results"
+        description="Explore evaluation results and compare model responses."
+      />
 
+      {isLoadingDetails ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      ) : (
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
             <TabsTrigger value="overview" className="data-[state=active]:bg-background">
@@ -54,7 +60,17 @@ export default function ResultsPage() {
             </TabsContent>
           ))}
         </Tabs>
-      </div>
-    </MainLayout>
+      )}
+    </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <BenchmarkProvider>
+      <MainLayout>
+        <ResultsContent />
+      </MainLayout>
+    </BenchmarkProvider>
   );
 }

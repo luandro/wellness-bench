@@ -2,24 +2,31 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProviderBadge } from '@/components/ui/provider-badge';
 import { useApp } from '@/contexts/AppContext';
+import { useBenchmark } from '@/contexts/BenchmarkContext';
 import { MessageSquare, Boxes, BarChart3, AlertTriangle } from 'lucide-react';
 
 export function ResultsOverview() {
-  const { runs, questions, providers } = useApp();
+  const { questions, providers } = useApp();
+  const { runs, runDetails } = useBenchmark();
 
-  const completedRuns = runs.filter(r => r.status === 'completed');
-  const latestRun = completedRuns[completedRuns.length - 1];
+  const stats = useMemo(() => {
+    if (runDetails && runDetails.stats) {
+      return {
+        totalRuns: runs.length,
+        questionsEvaluated: runDetails.stats.total_questions,
+        providersActive: runDetails.models_included.length,
+        totalEvaluations: runDetails.stats.succeeded,
+      };
+    }
+    return {
+      totalRuns: runs.length,
+      questionsEvaluated: questions.questions.filter(q => q.enabled).length,
+      providersActive: providers.providers.filter(p => p.enabled).length,
+      totalEvaluations: 0,
+    };
+  }, [runs.length, runDetails, questions.questions, providers.providers]);
 
-  const stats = {
-    totalRuns: completedRuns.length,
-    questionsEvaluated: questions.questions.filter(q => q.enabled).length,
-    providersActive: providers.providers.filter(p => p.enabled).length,
-    totalEvaluations: completedRuns.reduce((acc, run) => 
-      acc + run.items.filter(i => i.status === 'succeeded').length, 0
-    ),
-  };
-
-  if (completedRuns.length === 0) {
+  if (!runDetails && runs.length === 0) {
     return (
       <div className="text-center py-16">
         <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
@@ -37,6 +44,7 @@ export function ResultsOverview() {
     <div className="space-y-6">
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* ... (rest of the cards remain similar but using stats) ... */}
         <Card className="card-elevated">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -95,40 +103,29 @@ export function ResultsOverview() {
       </div>
 
       {/* Latest Run Summary */}
-      {latestRun && <LatestRunSummary run={latestRun} />}
+      {runDetails && (
+        <Card className="card-elevated">
+          <CardHeader>
+            <CardTitle className="text-lg">Run: {runDetails.run_name}</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {new Date(runDetails.created_at).toLocaleDateString()} at{' '}
+              {new Date(runDetails.created_at).toLocaleTimeString()}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {runDetails.models_included.map((model) => (
+                <ProviderBadge key={`${model.provider_id}-${model.model_id}`} provider={model.provider_id} />
+              ))}
+            </div>
+            {runDetails.run_description && (
+              <p className="mt-4 text-sm text-muted-foreground">
+                {runDetails.run_description}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
-  );
-}
-
-// Extracted component to avoid repeated filtering
-function LatestRunSummary({ run }: { run: { name: string; created_at: string; items: Array<{ id: string; status: string; provider_id: string }> } }) {
-  // Filter succeeded items once and memoize
-  const succeededItems = useMemo(
-    () => run.items.filter(item => item.status === 'succeeded'),
-    [run.items]
-  );
-
-  return (
-    <Card className="card-elevated">
-      <CardHeader>
-        <CardTitle className="text-lg">Latest Run: {run.name}</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {new Date(run.created_at).toLocaleDateString()} at{' '}
-          {new Date(run.created_at).toLocaleTimeString()}
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2">
-          {succeededItems.slice(0, 5).map((item) => (
-            <ProviderBadge key={item.id} provider={item.provider_id} />
-          ))}
-          {succeededItems.length > 5 && (
-            <span className="text-sm text-muted-foreground">
-              +{succeededItems.length - 5} more
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
   );
 }

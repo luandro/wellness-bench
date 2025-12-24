@@ -10,6 +10,40 @@ export interface BenchmarkRun {
   isLatest?: boolean;
 }
 
+// Full index.json structure
+export interface RunDetail {
+  run_id: string;
+  run_name: string;
+  run_description?: string;
+  created_at: string;
+  completed_at?: string;
+  languages_available: string[];
+  models_included: Array<{
+    provider_id: string;
+    model_id: string;
+    display_name: string;
+    version?: string;
+  }>;
+  question_ids: string[];
+  file_map: {
+    snapshots: {
+      questions: string;
+      eval_prompts: string;
+      providers: string;
+    };
+    per_question: Record<string, string>;
+    per_model: Record<string, Record<string, string>>;
+  };
+  stats?: {
+    total_questions: number;
+    total_models: number;
+    total_evaluations: number;
+    succeeded: number;
+    failed: number;
+    total_duration_ms: number;
+  };
+}
+
 export interface BiasFilters {
   market: boolean;
   growth: boolean;
@@ -17,22 +51,7 @@ export interface BiasFilters {
   power: boolean;
 }
 
-// Fallback mock data - used when static results aren't available
-const mockRuns: BenchmarkRun[] = [
-  {
-    id: 'run-2024-12',
-    name: 'December 2024',
-    date: '2024-12-15',
-    models: ['GPT-4o', 'Claude 3.5', 'Gemini Pro', 'Grok-2', 'DeepSeek-V3'],
-    isLatest: true,
-  },
-  {
-    id: 'run-2024-10',
-    name: 'October 2024',
-    date: '2024-10-22',
-    models: ['GPT-4', 'Claude 3', 'Gemini 1.5', 'Grok-1', 'DeepSeek-V2'],
-  },
-];
+// ... mock data ...
 
 // Types for the static runs.json catalog
 interface RunsCatalogEntry {
@@ -59,6 +78,10 @@ interface BenchmarkContextType {
   setSelectedRunId: (id: string) => void;
   isLoading: boolean;
   error: string | null;
+  
+  // Details
+  runDetails: RunDetail | null;
+  isLoadingDetails: boolean;
 
   // Bias filters
   biasFilters: BiasFilters;
@@ -90,6 +113,10 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
   const selectedRunIdRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const [runDetails, setRunDetails] = useState<RunDetail | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
   const [biasFilters, setBiasFilters] = useState<BiasFilters>({
     market: false,
     growth: false,
@@ -137,12 +164,6 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError(errorMessage);
       
-      toast({
-        title: "Failed to load benchmark runs",
-        description: "Using mock data instead. Please check your connection or configuration.",
-        variant: "destructive",
-      });
-
       // Fall back to mock data
       setRuns(mockRuns);
       if (!selectedRunIdRef.current) {
@@ -153,10 +174,36 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Load details for a specific run
+   */
+  const loadRunDetails = useCallback(async (runId: string) => {
+    setIsLoadingDetails(true);
+    try {
+      // In our generator, path is currently the runId
+      const details = await fetchResults<RunDetail>(`${runId}/index.json`);
+      setRunDetails(details);
+    } catch (err) {
+      console.error(`Failed to load details for run ${runId}:`, err);
+      setRunDetails(null);
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  }, []);
+
   // Load runs on mount
   useEffect(() => {
     loadRuns();
   }, [loadRuns]);
+
+  // Load details when selectedRunId changes
+  useEffect(() => {
+    if (selectedRunId && !selectedRunId.startsWith('run-2024')) { // Don't try to load mock run details
+      loadRunDetails(selectedRunId);
+    } else {
+      setRunDetails(null);
+    }
+  }, [selectedRunId, loadRunDetails]);
 
   const selectedRun = useMemo(() => {
     if (selectedRunId) {
@@ -184,6 +231,8 @@ export function BenchmarkProvider({ children }: { children: ReactNode }) {
       setSelectedRunId,
       isLoading,
       error,
+      runDetails,
+      isLoadingDetails,
       biasFilters,
       toggleBiasFilter,
       anyBiasFilterActive,
