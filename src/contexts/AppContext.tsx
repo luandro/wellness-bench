@@ -28,7 +28,12 @@ interface StoredApiKey {
   provider_id: string;
   key_last4: string;
   encrypted_key: string;
-  version: 'v3'; // v3 uses user-provided passphrase
+  version?: 'v2' | 'v3'; // undefined or 'v2' = legacy, 'v3' = passphrase-encrypted
+}
+
+/** Check if any stored keys are using legacy encryption */
+function hasLegacyKeys(keys: StoredApiKey[]): boolean {
+  return keys.some(k => k.version !== 'v3');
 }
 
 interface AppContextType {
@@ -53,6 +58,7 @@ interface AppContextType {
   // API Keys (Builder mode only)
   hasEnvKeys: boolean;
   storedKeys: StoredApiKey[];
+  hasLegacyKeys: boolean;
   setApiKey: (providerId: string, key: string) => Promise<void>;
   removeApiKey: (providerId: string) => void;
   getApiKey: (providerId: string) => Promise<string | null>;
@@ -115,11 +121,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isVaultSetUp, setIsVaultSetUp] = useState(false);
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
 
-  // Check vault status on mount
+  // Check vault status on mount and sync across tabs
   useEffect(() => {
     setIsVaultSetUp(isPassphraseSetUp());
     setIsVaultUnlocked(hasSessionPassphrase());
-  }, []);
+
+    // Listen for storage changes from other tabs
+    const handleStorageChange = (event: StorageEvent) => {
+      // If passphrase verification key changes, update vault setup status
+      if (event.key === 'benchmark_passphrase_verify') {
+        const wasSetUp = isVaultSetUp;
+        const nowSetUp = event.newValue !== null;
+        setIsVaultSetUp(nowSetUp);
+
+        // If vault was reset in another tab, lock this tab too
+        if (wasSetUp && !nowSetUp) {
+          clearSessionPassphrase();
+          setIsVaultUnlocked(false);
+        }
+      }
+
+      // If API keys change, reload them
+      if (event.key === STORAGE_KEYS.API_KEYS && event.newValue) {
+        try {
+          const keys = JSON.parse(event.newValue) as StoredApiKey[];
+          setStoredKeys(keys);
+        } catch {
+          // Ignore parse errors from other tabs
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [isVaultSetUp]);
 
   const reportStorageError = useCallback((message: string, error: unknown) => {
     console.error(message, error);
@@ -358,6 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resetVault: resetVaultHandler,
       hasEnvKeys,
       storedKeys,
+      hasLegacyKeys: hasLegacyKeys(storedKeys),
       setApiKey,
       removeApiKey,
       getApiKey,

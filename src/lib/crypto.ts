@@ -1,14 +1,50 @@
 /**
  * Secure API key encryption using Web Crypto API
  *
- * Uses AES-GCM encryption with a derived key from a user-provided passphrase.
+ * Uses AES-256-GCM encryption with a derived key from a user-provided passphrase.
  *
- * SECURITY NOTES:
- * - Storing secrets client-side is inherently limited. For production, use
- *   environment variables or a backend service.
- * - This encryption protects against casual access but not against determined
- *   attackers with access to the browser (e.g., malicious extensions, XSS).
- * - Users should use unique, strong passphrases and understand the limitations.
+ * ## Security Architecture
+ *
+ * - **Key Derivation**: PBKDF2 with SHA-256, 600,000 iterations (OWASP 2023 recommendation)
+ * - **Encryption**: AES-256-GCM with random 96-bit IV per encryption
+ * - **Salt**: Random 128-bit salt per encryption for key derivation
+ * - **Verification**: Encrypted token stored to validate passphrase without storing it
+ *
+ * ## Session Passphrase Storage
+ *
+ * The passphrase is stored in a module-scoped variable (`sessionPassphrase`) for the
+ * duration of the browser tab session. This design has important security implications:
+ *
+ * **Why in-memory storage?**
+ * - Passphrases must be available for encryption/decryption operations
+ * - Storing in sessionStorage would expose it to XSS attacks via storage APIs
+ * - In-memory storage requires code execution access to read, raising the bar
+ *
+ * **Limitations:**
+ * - Passphrase may remain in memory after "lock" until garbage collection
+ * - JavaScript cannot guarantee secure memory erasure
+ * - A compromised extension with code execution access could read the variable
+ * - Each browser tab requires separate passphrase entry (no cross-tab sync of passphrase)
+ *
+ * ## Threat Model
+ *
+ * **Protected against:**
+ * - Casual inspection of localStorage (keys are encrypted)
+ * - Offline attacks on stolen storage data (requires passphrase to decrypt)
+ * - Shoulder surfing (only last 4 digits shown)
+ *
+ * **NOT protected against:**
+ * - Malicious browser extensions with code execution
+ * - XSS vulnerabilities in the application
+ * - Physical access to unlocked browser session
+ * - Memory forensics on the running browser
+ *
+ * ## Recommendations for Users
+ *
+ * - Use a unique, strong passphrase (12+ characters recommended)
+ * - Lock the vault when stepping away from the computer
+ * - Consider using environment variables for production deployments
+ * - Use API keys with minimal required permissions (principle of least privilege)
  */
 
 const ENCRYPTION_ALGORITHM = 'AES-GCM';

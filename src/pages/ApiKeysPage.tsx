@@ -19,12 +19,68 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Key, Eye, EyeOff, Trash2, Plus, AlertTriangle, Check, X, Lock, Unlock, ShieldAlert } from 'lucide-react';
+import { isCryptoAvailable } from '@/lib/crypto';
+import { Key, Eye, EyeOff, Trash2, Plus, AlertTriangle, Check, X, Lock, Unlock, ShieldAlert, RefreshCw, ShieldOff } from 'lucide-react';
+
+/**
+ * Evaluate passphrase strength and return a score (0-4) with feedback
+ */
+function evaluatePassphraseStrength(passphrase: string): {
+  score: 0 | 1 | 2 | 3 | 4;
+  label: string;
+  color: string;
+} {
+  if (!passphrase) {
+    return { score: 0, label: '', color: '' };
+  }
+
+  let score = 0;
+
+  // Length checks
+  if (passphrase.length >= 8) score++;
+  if (passphrase.length >= 12) score++;
+  if (passphrase.length >= 16) score++;
+
+  // Character variety checks
+  const hasLower = /[a-z]/.test(passphrase);
+  const hasUpper = /[A-Z]/.test(passphrase);
+  const hasNumber = /[0-9]/.test(passphrase);
+  const hasSpecial = /[^a-zA-Z0-9]/.test(passphrase);
+
+  const varietyCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+  if (varietyCount >= 3) score++;
+
+  // Clamp to 4
+  score = Math.min(score, 4) as 0 | 1 | 2 | 3 | 4;
+
+  const labels: Record<number, string> = {
+    0: '',
+    1: 'Weak',
+    2: 'Fair',
+    3: 'Good',
+    4: 'Strong',
+  };
+
+  const colors: Record<number, string> = {
+    0: '',
+    1: 'bg-destructive',
+    2: 'bg-warning',
+    3: 'bg-primary',
+    4: 'bg-success',
+  };
+
+  return {
+    score,
+    label: labels[score],
+    color: colors[score],
+  };
+}
 
 export default function ApiKeysPage() {
   const {
     providers,
     storedKeys,
+    hasLegacyKeys,
     setApiKey,
     removeApiKey,
     hasEnvKeys,
@@ -48,6 +104,9 @@ export default function ApiKeysPage() {
   const [showPassphrase, setShowPassphrase] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
 
+  // Check if Web Crypto is available
+  const cryptoAvailable = isCryptoAvailable();
+
   // This page should not be shown if env keys exist or in viewer mode
   if (hasEnvKeys || mode === 'viewer') {
     return (
@@ -65,6 +124,50 @@ export default function ApiKeysPage() {
                   ? "API keys are configured via environment variables."
                   : "API keys are not available in Viewer mode."}
               </p>
+            </CardContent>
+          </Card>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  // Show graceful degradation message when Web Crypto is unavailable
+  if (!cryptoAvailable) {
+    return (
+      <MainLayout>
+        <div className="p-8 max-w-4xl mx-auto">
+          <PageHeader
+            title="API Keys & Providers"
+            description="Secure storage requires browser encryption support."
+          />
+          <Card className="card-elevated max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                <ShieldOff className="w-8 h-8 text-destructive" />
+              </div>
+              <CardTitle>Encryption Not Available</CardTitle>
+              <CardDescription>
+                Your browser does not support the Web Crypto API, which is required for
+                secure API key storage.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground space-y-2">
+                <p><strong>Common causes:</strong></p>
+                <ul className="list-disc pl-4 space-y-1">
+                  <li>Accessing the page over insecure HTTP (use HTTPS)</li>
+                  <li>Using an older browser that lacks crypto support</li>
+                  <li>Privacy settings blocking crypto APIs</li>
+                </ul>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                <p><strong>Workaround:</strong></p>
+                <p>
+                  Use environment variables to configure API keys instead.
+                  Set variables like <code className="text-xs bg-muted px-1 py-0.5 rounded">OPENAI_API_KEY</code> in
+                  your build environment.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -228,20 +331,50 @@ export default function ApiKeysPage() {
               </div>
 
               {!isVaultSetUp && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Confirm Passphrase</label>
-                  <Input
-                    type={showPassphrase ? 'text' : 'password'}
-                    value={confirmPassphrase}
-                    onChange={(e) => setConfirmPassphrase(e.target.value)}
-                    placeholder="Confirm your passphrase..."
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleUnlockVault();
-                      }
-                    }}
-                  />
-                </div>
+                <>
+                  {/* Passphrase strength indicator */}
+                  {passphrase && (
+                    <div className="space-y-1">
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4].map((level) => {
+                          const strength = evaluatePassphraseStrength(passphrase);
+                          return (
+                            <div
+                              key={level}
+                              className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                level <= strength.score
+                                  ? strength.color
+                                  : 'bg-muted'
+                              }`}
+                            />
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Strength: {evaluatePassphraseStrength(passphrase).label || 'Too short'}
+                        {passphrase.length < 8 && ` (min 8 characters)`}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Confirm Passphrase</label>
+                    <Input
+                      type={showPassphrase ? 'text' : 'password'}
+                      value={confirmPassphrase}
+                      onChange={(e) => setConfirmPassphrase(e.target.value)}
+                      placeholder="Confirm your passphrase..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleUnlockVault();
+                        }
+                      }}
+                    />
+                    {confirmPassphrase && passphrase !== confirmPassphrase && (
+                      <p className="text-xs text-destructive">Passphrases do not match</p>
+                    )}
+                  </div>
+                </>
               )}
 
               <Button
@@ -323,6 +456,24 @@ export default function ApiKeysPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Migration Notice for Legacy Keys */}
+        {hasLegacyKeys && (
+          <Card className="mb-6 border-primary/30 bg-primary/5">
+            <CardContent className="p-4">
+              <div className="flex gap-3">
+                <RefreshCw className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground mb-1">Security Upgrade Required</p>
+                  <p className="text-muted-foreground">
+                    Some of your API keys use older encryption. They will be automatically removed when accessed.
+                    Please re-enter these keys to upgrade them to the new passphrase-based encryption.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Provider Keys */}
         <div className="space-y-4">
