@@ -31,5 +31,5 @@
     "retry_attempts": 3,
     "retry_delay_ms": 1000
   },
-  "output_dir": "benchmarks/results"
+  "output_dir": "public/benchmarks/results"
 }
