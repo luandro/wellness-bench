@@ -260,9 +260,11 @@ export async function generateOutputBundle(
     // If no synthesis, add empty
     if (Object.keys(synthesisPerLang).length === 0) {
       synthesisPerLang[plan.default_language] = {
+        question_id: question.id,
         common_ground: [],
         key_divergences: [],
         salient_bias_patterns: [],
+        generated_at: new Date().toISOString(),
       };
     }
 
