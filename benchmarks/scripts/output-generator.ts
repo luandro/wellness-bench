@@ -131,13 +131,13 @@ function createDisplayBlocks(
 
   if (evaluations.step_b) {
     blocks.bias_analysis = {
-      detected_biases: evaluations.step_b.detected_biases.map((b) => ({
+      detected_biases: (evaluations.step_b.detected_biases || []).map((b) => ({
         id: b.id,
         label: b.label,
         explanation: b.explanation,
-        evidence_quotes: b.evidence_quotes,
+        evidence_quotes: b.evidence_quotes || [],
       })),
-      overall_summary: evaluations.step_b.overall_bias_profile_summary,
+      overall_summary: evaluations.step_b.overall_bias_profile_summary || '',
     };
   }
 

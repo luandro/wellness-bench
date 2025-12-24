@@ -499,7 +499,7 @@ export async function translateResults(
       try {
         // Translate each array field
         const translatedCommonGround = await Promise.all(
-          synthesis.common_ground.map((text) =>
+          (synthesis.common_ground || []).map((text) =>
             translateText(
               adapter,
               modelId,
@@ -514,7 +514,7 @@ export async function translateResults(
         );
 
         const translatedDivergences = await Promise.all(
-          synthesis.key_divergences.map((text) =>
+          (synthesis.key_divergences || []).map((text) =>
             translateText(
               adapter,
               modelId,
@@ -529,7 +529,7 @@ export async function translateResults(
         );
 
         const translatedPatterns = await Promise.all(
-          synthesis.salient_bias_patterns.map((text) =>
+          (synthesis.salient_bias_patterns || []).map((text) =>
             translateText(
               adapter,
               modelId,
