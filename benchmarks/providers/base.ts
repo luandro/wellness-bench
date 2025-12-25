@@ -186,9 +186,9 @@ export function sanitizeApiError(status: number, rawError: string): string {
 
   const genericMessage = statusMessages[status] || `Request failed with status ${status}`;
 
-  // Log the full error for debugging (but don't expose to user)
-  if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
-    console.debug(`[API Error ${status}] Full response:`, rawError.slice(0, 500));
+  // Log only safe metadata for debugging (never log raw error content)
+  if (process.env.NODE_ENV === 'development') {
+    console.debug(`[API Error ${status}] Error type: ${typeof rawError}, length: ${rawError.length} chars`);
   }
 
   return genericMessage;

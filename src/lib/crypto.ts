@@ -242,10 +242,26 @@ async function encryptWithPassphrase(plaintext: string, passphrase: string): Pro
  * Decrypt a string that was encrypted with encryptWithPassphrase
  */
 async function decryptWithPassphrase(encryptedData: string, passphrase: string): Promise<string> {
-  // Decode from base64
-  const combined = new Uint8Array(
-    atob(encryptedData).split('').map(c => c.charCodeAt(0))
-  );
+  // Validate and decode from base64
+  let combined: Uint8Array;
+  try {
+    // Basic validation
+    if (!encryptedData || typeof encryptedData !== 'string') {
+      throw new Error('Invalid encrypted data format');
+    }
+
+    // Attempt base64 decode with error handling
+    const decoded = atob(encryptedData);
+    combined = new Uint8Array(decoded.split('').map(c => c.charCodeAt(0)));
+
+    // Validate minimum length (salt + iv + at least some ciphertext)
+    if (combined.length < SALT_LENGTH + IV_LENGTH + 1) {
+      throw new Error('Invalid encrypted data format');
+    }
+  } catch (error) {
+    // Don't leak details about what failed
+    throw new Error('Failed to decode encrypted data. The data may be corrupted.');
+  }
 
   // Extract salt, iv, and ciphertext
   const salt = combined.slice(0, SALT_LENGTH);

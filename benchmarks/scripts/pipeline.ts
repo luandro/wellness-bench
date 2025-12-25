@@ -490,10 +490,18 @@ export async function translateResults(
 ): Promise<{
   translatedSyntheses: SynthesisResult[];
 }> {
+  // Validate concurrentTranslations parameter (must be positive integer, max 10)
+  const validatedConcurrency = Math.max(1, Math.min(Math.floor(concurrentTranslations), 10));
+  if (validatedConcurrency !== concurrentTranslations) {
+    console.warn(
+      `concurrentTranslations adjusted from ${concurrentTranslations} to ${validatedConcurrency} (valid range: 1-10)`
+    );
+  }
+
   const translatedSyntheses: SynthesisResult[] = [...syntheses];
 
   // Rate limiter to prevent overwhelming the API
-  const translationLimit = pLimit(concurrentTranslations);
+  const translationLimit = pLimit(validatedConcurrency);
 
   /**
    * Helper to translate an array of texts with rate limiting
