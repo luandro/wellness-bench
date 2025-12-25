@@ -3,7 +3,7 @@
  * Supports GPT-4, GPT-4 Turbo, GPT-4o, and other OpenAI models
  */
 
-import { BaseProviderAdapter, withRetry } from './base.js';
+import { BaseProviderAdapter, withRetry, sanitizeApiError } from './base.js';
 import { OPENAI_API_BASE } from './constants.js';
 import type {
   CompletionRequest,
@@ -86,7 +86,7 @@ export class OpenAIAdapter extends BaseProviderAdapter {
 
       if (!res.ok) {
         const errorText = await res.text();
-        throw new Error(`OpenAI API error (${res.status}): ${errorText}`);
+        throw new Error(`OpenAI API error: ${sanitizeApiError(res.status, errorText)}`);
       }
 
       return res.json() as Promise<OpenAIResponse>;

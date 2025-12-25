@@ -8,7 +8,16 @@ import type {
   ResultsBundle,
   SynthesisSummary
 } from '@/types/benchmark';
-import { encryptApiKey, decryptApiKey, isCryptoAvailable } from '@/lib/crypto';
+import {
+  encryptApiKey,
+  decryptApiKey,
+  isCryptoAvailable,
+  initializePassphrase,
+  isPassphraseSetUp,
+  hasSessionPassphrase,
+  clearSessionPassphrase,
+  resetPassphrase,
+} from '@/lib/crypto';
 import { toast } from '@/hooks/use-toast';
 
 import questionsData from '@/data/questions.json';
@@ -19,13 +28,18 @@ interface StoredApiKey {
   provider_id: string;
   key_last4: string;
   encrypted_key: string;
-  version?: 'v2'; // Optional for backward compatibility with legacy base64 keys
+  version?: 'v2' | 'v3'; // undefined or 'v2' = legacy, 'v3' = passphrase-encrypted
+}
+
+/** Check if any stored keys are using legacy encryption */
+function hasLegacyKeys(keys: StoredApiKey[]): boolean {
+  return keys.some(k => k.version !== 'v3');
 }
 
 interface AppContextType {
   // App Mode
   mode: AppMode;
-  
+
   // Configuration
   questions: QuestionsConfig;
   setQuestions: (config: QuestionsConfig) => void;
@@ -33,23 +47,31 @@ interface AppContextType {
   setEvalPrompts: (config: EvalPromptsConfig) => void;
   providers: ProvidersConfig;
   setProviders: (config: ProvidersConfig) => void;
-  
+
+  // Vault (passphrase-protected API key storage)
+  isVaultSetUp: boolean;
+  isVaultUnlocked: boolean;
+  unlockVault: (passphrase: string) => Promise<boolean>;
+  lockVault: () => void;
+  resetVault: () => void;
+
   // API Keys (Builder mode only)
   hasEnvKeys: boolean;
   storedKeys: StoredApiKey[];
+  hasLegacyKeys: boolean;
   setApiKey: (providerId: string, key: string) => Promise<void>;
   removeApiKey: (providerId: string) => void;
   getApiKey: (providerId: string) => Promise<string | null>;
-  
+
   // Runs (Builder mode only)
   runs: Run[];
   addRun: (run: Run) => void;
   updateRun: (run: Run) => void;
-  
+
   // Results (Viewer mode)
   resultsBundle: ResultsBundle | null;
   loadResultsBundle: (bundle: ResultsBundle) => void;
-  
+
   // Syntheses
   syntheses: SynthesisSummary[];
   addSynthesis: (synthesis: SynthesisSummary) => void;
@@ -66,6 +88,9 @@ const STORAGE_KEYS = {
   SYNTHESES: 'benchmark_syntheses',
 };
 
+/** Maximum number of runs to keep in storage */
+const MAX_STORED_RUNS = 50;
+
 // Check for environment variables (in a real app, these would be checked at build time)
 const checkEnvKeys = (): boolean => {
   // In a browser environment, we check for specific indicators
@@ -76,7 +101,7 @@ const checkEnvKeys = (): boolean => {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mode] = useState<AppMode>('builder'); // Would be set based on build config
   const [hasEnvKeys] = useState(checkEnvKeys());
-  
+
   const [questions, setQuestionsState] = useState<QuestionsConfig>(
     questionsData as QuestionsConfig
   );
@@ -86,11 +111,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [providers, setProvidersState] = useState<ProvidersConfig>(
     providersData as ProvidersConfig
   );
-  
+
   const [storedKeys, setStoredKeys] = useState<StoredApiKey[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [resultsBundle, setResultsBundle] = useState<ResultsBundle | null>(null);
   const [syntheses, setSyntheses] = useState<SynthesisSummary[]>([]);
+
+  // Vault state
+  const [isVaultSetUp, setIsVaultSetUp] = useState(false);
+  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
+
+  // Check vault status on mount and sync across tabs
+  useEffect(() => {
+    setIsVaultSetUp(isPassphraseSetUp());
+    setIsVaultUnlocked(hasSessionPassphrase());
+
+    // Listen for storage changes from other tabs
+    const handleStorageChange = (event: StorageEvent) => {
+      // If passphrase verification key changes, update vault setup status
+      if (event.key === 'benchmark_passphrase_verify') {
+        const wasSetUp = isVaultSetUp;
+        const nowSetUp = event.newValue !== null;
+        setIsVaultSetUp(nowSetUp);
+
+        // If vault was reset in another tab, lock this tab too
+        if (wasSetUp && !nowSetUp) {
+          clearSessionPassphrase();
+          setIsVaultUnlocked(false);
+        }
+      }
+
+      // If API keys change, reload them
+      if (event.key === STORAGE_KEYS.API_KEYS && event.newValue) {
+        try {
+          const keys = JSON.parse(event.newValue) as StoredApiKey[];
+          setStoredKeys(keys);
+        } catch {
+          // Ignore parse errors from other tabs
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [isVaultSetUp]);
 
   const reportStorageError = useCallback((message: string, error: unknown) => {
     console.error(message, error);
@@ -155,23 +219,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     safeSetItem(STORAGE_KEYS.PROVIDERS, JSON.stringify(updated), 'providers');
   };
 
-  const setApiKey = useCallback(async (providerId: string, key: string): Promise<void> => {
-    const keyLast4 = key.slice(-4);
-
-    let encryptedKey: string;
-    if (isCryptoAvailable()) {
-      encryptedKey = await encryptApiKey(key);
-    } else {
-      // Fallback for environments without Web Crypto API
-      console.warn('Web Crypto API not available, using fallback encoding');
-      encryptedKey = btoa(key);
+  // Vault management
+  const unlockVault = useCallback(async (passphrase: string): Promise<boolean> => {
+    if (!isCryptoAvailable()) {
+      toast({
+        title: 'Encryption Not Available',
+        description: 'Web Crypto API is not available in this browser. Cannot securely store API keys.',
+        variant: 'destructive',
+      });
+      return false;
     }
+
+    try {
+      const success = await initializePassphrase(passphrase);
+      if (success) {
+        setIsVaultSetUp(true);
+        setIsVaultUnlocked(true);
+        return true;
+      } else {
+        toast({
+          title: 'Incorrect Passphrase',
+          description: 'The passphrase you entered is incorrect.',
+          variant: 'destructive',
+        });
+        return false;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to unlock vault';
+      toast({
+        title: 'Vault Error',
+        description: message,
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, []);
+
+  const lockVault = useCallback(() => {
+    clearSessionPassphrase();
+    setIsVaultUnlocked(false);
+  }, []);
+
+  const resetVaultHandler = useCallback(() => {
+    resetPassphrase();
+    // Also clear all stored API keys since they can't be decrypted anymore
+    setStoredKeys([]);
+    safeSetItem(STORAGE_KEYS.API_KEYS, JSON.stringify([]), 'API keys');
+    setIsVaultSetUp(false);
+    setIsVaultUnlocked(false);
+    toast({
+      title: 'Vault Reset',
+      description: 'All stored API keys have been removed. You can set up a new passphrase.',
+    });
+  }, [safeSetItem]);
+
+  const setApiKey = useCallback(async (providerId: string, key: string): Promise<void> => {
+    if (!isCryptoAvailable()) {
+      throw new Error('Web Crypto API is not available. Cannot securely store API keys.');
+    }
+
+    if (!isVaultUnlocked) {
+      throw new Error('Vault is locked. Please unlock it first.');
+    }
+
+    const keyLast4 = key.slice(-4);
+    const encryptedKey = await encryptApiKey(key);
 
     const newKey: StoredApiKey = {
       provider_id: providerId,
       key_last4: keyLast4,
       encrypted_key: encryptedKey,
-      version: 'v2',
+      version: 'v3',
     };
 
     const updated = [
@@ -180,7 +298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ];
     setStoredKeys(updated);
     safeSetItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated), 'API keys');
-  }, [safeSetItem, storedKeys]);
+  }, [isVaultUnlocked, safeSetItem, storedKeys]);
 
   const removeApiKey = useCallback((providerId: string) => {
     const updated = storedKeys.filter(k => k.provider_id !== providerId);
@@ -194,13 +312,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
+    if (!isVaultUnlocked) {
+      throw new Error('Vault is locked. Please unlock it first.');
+    }
+
+    // Only support v3 (passphrase-encrypted) keys
+    // Legacy v2 and unversioned keys are no longer supported for security
+    if (stored.version !== 'v3') {
+      toast({
+        title: 'Key Migration Required',
+        description: `The API key for ${providerId} uses an older format. Please re-enter it.`,
+        variant: 'destructive',
+      });
+      // Remove the legacy key
+      const updated = storedKeys.filter(k => k.provider_id !== providerId);
+      setStoredKeys(updated);
+      safeSetItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated), 'API keys');
+      return null;
+    }
+
     try {
-      if (stored.version === 'v2' && isCryptoAvailable()) {
-        return await decryptApiKey(stored.encrypted_key);
-      } else {
-        // Legacy fallback for old base64-encoded keys
-        return atob(stored.encrypted_key);
-      }
+      return await decryptApiKey(stored.encrypted_key);
     } catch (error) {
       reportStorageError('Unable to decrypt stored API key. Please re-enter it.', error);
       const updated = storedKeys.filter(k => k.provider_id !== providerId);
@@ -208,19 +340,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       safeSetItem(STORAGE_KEYS.API_KEYS, JSON.stringify(updated), 'API keys');
       return null;
     }
-  }, [reportStorageError, safeSetItem, storedKeys]);
+  }, [isVaultUnlocked, reportStorageError, safeSetItem, storedKeys]);
 
-  const addRun = (run: Run) => {
-    const updated = [...runs, run];
-    setRuns(updated);
-    safeSetItem(STORAGE_KEYS.RUNS, JSON.stringify(updated), 'runs');
-  };
+  const addRun = useCallback((run: Run) => {
+    setRuns(currentRuns => {
+      // Enforce maximum stored runs limit
+      let updated = [...currentRuns, run];
+      if (updated.length > MAX_STORED_RUNS) {
+        // Remove oldest runs (keep most recent)
+        updated = updated.slice(-MAX_STORED_RUNS);
+      }
+      safeSetItem(STORAGE_KEYS.RUNS, JSON.stringify(updated), 'runs');
+      return updated;
+    });
+  }, [safeSetItem]);
 
-  const updateRun = (run: Run) => {
-    const updated = runs.map(r => r.id === run.id ? run : r);
-    setRuns(updated);
-    safeSetItem(STORAGE_KEYS.RUNS, JSON.stringify(updated), 'runs');
-  };
+  const updateRun = useCallback((run: Run) => {
+    setRuns(currentRuns => {
+      const updated = currentRuns.map(r => r.id === run.id ? run : r);
+      safeSetItem(STORAGE_KEYS.RUNS, JSON.stringify(updated), 'runs');
+      return updated;
+    });
+  }, [safeSetItem]);
 
   const loadResultsBundle = (bundle: ResultsBundle) => {
     setResultsBundle(bundle);
@@ -245,8 +386,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEvalPrompts,
       providers,
       setProviders,
+      isVaultSetUp,
+      isVaultUnlocked,
+      unlockVault,
+      lockVault,
+      resetVault: resetVaultHandler,
       hasEnvKeys,
       storedKeys,
+      hasLegacyKeys: hasLegacyKeys(storedKeys),
       setApiKey,
       removeApiKey,
       getApiKey,

@@ -3,7 +3,7 @@
  * Supports Gemini 1.5, 2.0, and other Gemini models
  */
 
-import { BaseProviderAdapter, withRetry } from './base.js';
+import { BaseProviderAdapter, withRetry, sanitizeApiError } from './base.js';
 import { GOOGLE_API_BASE } from './constants.js';
 import type {
   CompletionRequest,
@@ -103,7 +103,7 @@ export class GoogleGeminiAdapter extends BaseProviderAdapter {
 
       if (!res.ok) {
         const errorText = await res.text();
-        throw new Error(`Google Gemini API error (${res.status}): ${errorText}`);
+        throw new Error(`Google Gemini API error: ${sanitizeApiError(res.status, errorText)}`);
       }
 
       return res.json() as Promise<GeminiResponse>;

@@ -4,7 +4,7 @@
  * Uses OpenAI-compatible API format
  */
 
-import { BaseProviderAdapter, withRetry } from './base.js';
+import { BaseProviderAdapter, withRetry, sanitizeApiError } from './base.js';
 import { GROK_API_BASE } from './constants.js';
 import type {
   CompletionRequest,
@@ -86,7 +86,7 @@ export class GrokAdapter extends BaseProviderAdapter {
 
       if (!res.ok) {
         const errorText = await res.text();
-        throw new Error(`Grok API error (${res.status}): ${errorText}`);
+        throw new Error(`Grok API error: ${sanitizeApiError(res.status, errorText)}`);
       }
 
       return res.json() as Promise<GrokResponse>;

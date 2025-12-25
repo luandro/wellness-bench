@@ -485,11 +485,59 @@ export async function translateResults(
     maxRetries?: number;
     baseDelayMs?: number;
     maxDelayMs?: number;
-  }
+  },
+  concurrentTranslations: number = 3
 ): Promise<{
   translatedSyntheses: SynthesisResult[];
 }> {
+  // Validate concurrentTranslations parameter (must be positive integer, max 10)
+  const validatedConcurrency = Math.max(1, Math.min(Math.floor(concurrentTranslations), 10));
+  if (validatedConcurrency !== concurrentTranslations) {
+    console.warn(
+      `concurrentTranslations adjusted from ${concurrentTranslations} to ${validatedConcurrency} (valid range: 1-10)`
+    );
+  }
+
   const translatedSyntheses: SynthesisResult[] = [...syntheses];
+
+  // Rate limiter to prevent overwhelming the API
+  const translationLimit = pLimit(validatedConcurrency);
+
+  /**
+   * Helper to translate an array of texts with rate limiting
+   * Uses Promise.allSettled for partial failure handling - failed translations
+   * are replaced with original text and logged
+   */
+  async function translateArray(texts: string[], targetLang: string): Promise<string[]> {
+    const tasks = texts.map((text) =>
+      translationLimit(() =>
+        translateText(
+          adapter,
+          modelId,
+          text,
+          sourceLanguage,
+          targetLang,
+          translationTemplate,
+          { temperature },
+          retryOptions
+        )
+      )
+    );
+
+    const results = await Promise.allSettled(tasks);
+
+    return results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        // Log failure but continue with original text
+        console.warn(
+          `Translation failed for item ${index + 1} to ${targetLang}: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}`
+        );
+        return texts[index]; // Fallback to original text
+      }
+    });
+  }
 
   // Translate syntheses to each target language
   for (const synthesis of syntheses) {
@@ -497,50 +545,20 @@ export async function translateResults(
       if (targetLang === sourceLanguage) continue;
 
       try {
-        // Translate each array field
-        const translatedCommonGround = await Promise.all(
-          (synthesis.common_ground || []).map((text) =>
-            translateText(
-              adapter,
-              modelId,
-              text,
-              sourceLanguage,
-              targetLang,
-              translationTemplate,
-              { temperature },
-              retryOptions
-            )
-          )
+        // Translate each array field with rate limiting
+        const translatedCommonGround = await translateArray(
+          synthesis.common_ground || [],
+          targetLang
         );
 
-        const translatedDivergences = await Promise.all(
-          (synthesis.key_divergences || []).map((text) =>
-            translateText(
-              adapter,
-              modelId,
-              text,
-              sourceLanguage,
-              targetLang,
-              translationTemplate,
-              { temperature },
-              retryOptions
-            )
-          )
+        const translatedDivergences = await translateArray(
+          synthesis.key_divergences || [],
+          targetLang
         );
 
-        const translatedPatterns = await Promise.all(
-          (synthesis.salient_bias_patterns || []).map((text) =>
-            translateText(
-              adapter,
-              modelId,
-              text,
-              sourceLanguage,
-              targetLang,
-              translationTemplate,
-              { temperature },
-              retryOptions
-            )
-          )
+        const translatedPatterns = await translateArray(
+          synthesis.salient_bias_patterns || [],
+          targetLang
         );
 
         translatedSyntheses.push({

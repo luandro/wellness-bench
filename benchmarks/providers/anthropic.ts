@@ -3,7 +3,7 @@
  * Supports Claude 3, Claude 3.5, and Claude Sonnet 4 models
  */
 
-import { BaseProviderAdapter, withRetry } from './base.js';
+import { BaseProviderAdapter, withRetry, sanitizeApiError } from './base.js';
 import { ANTHROPIC_VERSION } from './constants.js';
 import type {
   CompletionRequest,
@@ -102,7 +102,7 @@ export class AnthropicAdapter extends BaseProviderAdapter {
 
       if (!res.ok) {
         const errorText = await res.text();
-        throw new Error(`Anthropic API error (${res.status}): ${errorText}`);
+        throw new Error(`Anthropic API error: ${sanitizeApiError(res.status, errorText)}`);
       }
 
       return res.json() as Promise<AnthropicResponse>;
@@ -110,11 +110,18 @@ export class AnthropicAdapter extends BaseProviderAdapter {
 
     const latencyMs = Date.now() - startTime;
 
+    // Validate response has content
+    if (!response.content || response.content.length === 0) {
+      throw new Error('Anthropic API returned empty content');
+    }
+
     // Combine content blocks
-    const content = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('');
+    const textBlocks = response.content.filter((block) => block.type === 'text');
+    if (textBlocks.length === 0) {
+      throw new Error('Anthropic API returned no text content blocks');
+    }
+
+    const content = textBlocks.map((block) => block.text).join('');
 
     return {
       content,
