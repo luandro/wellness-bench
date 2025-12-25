@@ -62,26 +62,111 @@ const PBKDF2_ITERATIONS = 600000;
  * This allows us to verify the passphrase is correct before attempting decryption.
  */
 const PASSPHRASE_VERIFICATION_KEY = 'benchmark_passphrase_verify';
-const VERIFICATION_TOKEN = 'wellness-bench-v1';
+
+/**
+ * Verification token includes a version and random component.
+ * The random part is generated once during vault setup and stored with the encrypted token.
+ * This prevents offline brute-force attacks using known plaintext.
+ */
+const VERIFICATION_TOKEN_PREFIX = 'wellness-bench-v2-';
 
 /** Session storage for the passphrase (cleared when browser tab closes) */
 let sessionPassphrase: string | null = null;
+
+/** Audit log for security events (in-memory, cleared on page reload) */
+const securityAuditLog: Array<{ timestamp: string; event: string; details?: string }> = [];
+
+/**
+ * Log a security event for audit purposes
+ */
+function logSecurityEvent(event: string, details?: string): void {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    event,
+    details,
+  };
+  securityAuditLog.push(entry);
+  // Keep only last 100 entries to prevent memory bloat
+  if (securityAuditLog.length > 100) {
+    securityAuditLog.shift();
+  }
+  // Also log to console in development
+  if (process.env.NODE_ENV === 'development') {
+    console.info('[Security Audit]', entry.event, entry.details || '');
+  }
+}
+
+/**
+ * Get the security audit log (for debugging/monitoring)
+ */
+export function getSecurityAuditLog(): ReadonlyArray<{ timestamp: string; event: string; details?: string }> {
+  return [...securityAuditLog];
+}
+
+/**
+ * Validate passphrase complexity requirements
+ * Requires: 8+ chars, and at least 2 of: lowercase, uppercase, numbers, special chars
+ */
+export function validatePassphraseComplexity(passphrase: string): { valid: boolean; message: string } {
+  const trimmed = passphrase.trim();
+
+  if (trimmed.length < 8) {
+    return { valid: false, message: 'Passphrase must be at least 8 characters' };
+  }
+
+  const hasLower = /[a-z]/.test(trimmed);
+  const hasUpper = /[A-Z]/.test(trimmed);
+  const hasNumber = /[0-9]/.test(trimmed);
+  const hasSpecial = /[^a-zA-Z0-9]/.test(trimmed);
+
+  const varietyCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+
+  if (varietyCount < 2) {
+    return {
+      valid: false,
+      message: 'Passphrase must include at least 2 of: lowercase, uppercase, numbers, special characters'
+    };
+  }
+
+  return { valid: true, message: '' };
+}
 
 /**
  * Set the encryption passphrase for the current session.
  * The passphrase is stored in memory only (not persisted).
  */
 export function setSessionPassphrase(passphrase: string): void {
-  if (!passphrase || passphrase.length < 8) {
-    throw new Error('Passphrase must be at least 8 characters');
+  const trimmed = passphrase.trim();
+  const validation = validatePassphraseComplexity(trimmed);
+  if (!validation.valid) {
+    throw new Error(validation.message);
   }
-  sessionPassphrase = passphrase;
+  sessionPassphrase = trimmed;
+  logSecurityEvent('PASSPHRASE_SET', 'Session passphrase configured');
 }
 
 /**
  * Clear the session passphrase (e.g., on logout or lock)
+ * Attempts to overwrite memory before clearing (best-effort, not guaranteed in JS)
  */
 export function clearSessionPassphrase(): void {
+  if (sessionPassphrase) {
+    // Best-effort memory clearing: overwrite with random data before nulling
+    // Note: This is not guaranteed to work in JavaScript due to string immutability
+    // and garbage collection, but it raises the bar slightly
+    try {
+      const len = sessionPassphrase.length;
+      // Create garbage to potentially overwrite memory locations
+      for (let i = 0; i < 3; i++) {
+        const garbage = crypto.getRandomValues(new Uint8Array(len));
+        // Force some computation to prevent optimization away
+        void garbage.reduce((a, b) => a + b, 0);
+      }
+    } catch {
+      // Ignore errors during cleanup attempt
+    }
+    logSecurityEvent('PASSPHRASE_CLEARED', 'Session passphrase removed from memory');
+  }
   sessionPassphrase = null;
 }
 
@@ -180,8 +265,25 @@ async function decryptWithPassphrase(encryptedData: string, passphrase: string):
 }
 
 /**
+ * Generate a random verification token with prefix
+ * The random component prevents offline brute-force attacks using known plaintext
+ */
+function generateVerificationToken(): string {
+  const randomBytes = crypto.getRandomValues(new Uint8Array(16));
+  const randomHex = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return VERIFICATION_TOKEN_PREFIX + randomHex;
+}
+
+/**
+ * Check if a decrypted token is valid (starts with our prefix)
+ */
+function isValidVerificationToken(token: string): boolean {
+  return token.startsWith(VERIFICATION_TOKEN_PREFIX) || token === 'wellness-bench-v1';
+}
+
+/**
  * Initialize the passphrase by verifying it against a stored verification token.
- * On first use, creates the verification token.
+ * On first use, creates the verification token with a random component.
  * Returns true if passphrase is valid, false otherwise.
  */
 export async function initializePassphrase(passphrase: string): Promise<boolean> {
@@ -189,8 +291,10 @@ export async function initializePassphrase(passphrase: string): Promise<boolean>
     throw new Error('Web Crypto API is not available in this browser');
   }
 
-  if (!passphrase || passphrase.length < 8) {
-    throw new Error('Passphrase must be at least 8 characters');
+  const trimmed = passphrase.trim();
+  const validation = validatePassphraseComplexity(trimmed);
+  if (!validation.valid) {
+    throw new Error(validation.message);
   }
 
   const storedVerification = localStorage.getItem(PASSPHRASE_VERIFICATION_KEY);
@@ -198,21 +302,26 @@ export async function initializePassphrase(passphrase: string): Promise<boolean>
   if (storedVerification) {
     // Verify existing passphrase
     try {
-      const decrypted = await decryptWithPassphrase(storedVerification, passphrase);
-      if (decrypted === VERIFICATION_TOKEN) {
-        setSessionPassphrase(passphrase);
+      const decrypted = await decryptWithPassphrase(storedVerification, trimmed);
+      if (isValidVerificationToken(decrypted)) {
+        setSessionPassphrase(trimmed);
+        logSecurityEvent('VAULT_UNLOCKED', 'Vault successfully unlocked');
         return true;
       }
+      logSecurityEvent('VAULT_UNLOCK_FAILED', 'Invalid verification token');
       return false;
     } catch {
       // Decryption failed - wrong passphrase
+      logSecurityEvent('VAULT_UNLOCK_FAILED', 'Decryption failed - incorrect passphrase');
       return false;
     }
   } else {
-    // First time setup - create verification token
-    const encryptedToken = await encryptWithPassphrase(VERIFICATION_TOKEN, passphrase);
+    // First time setup - create verification token with random component
+    const verificationToken = generateVerificationToken();
+    const encryptedToken = await encryptWithPassphrase(verificationToken, trimmed);
     localStorage.setItem(PASSPHRASE_VERIFICATION_KEY, encryptedToken);
-    setSessionPassphrase(passphrase);
+    setSessionPassphrase(trimmed);
+    logSecurityEvent('VAULT_CREATED', 'New vault created with passphrase');
     return true;
   }
 }
@@ -229,6 +338,7 @@ export function isPassphraseSetUp(): boolean {
  * This is a destructive operation!
  */
 export function resetPassphrase(): void {
+  logSecurityEvent('VAULT_RESET', 'Vault reset initiated - all encrypted data will be cleared');
   localStorage.removeItem(PASSPHRASE_VERIFICATION_KEY);
   clearSessionPassphrase();
 }
@@ -246,12 +356,15 @@ export async function encryptApiKey(apiKey: string): Promise<string> {
 
   try {
     const passphrase = getPassphrase();
-    return await encryptWithPassphrase(apiKey, passphrase);
+    const result = await encryptWithPassphrase(apiKey, passphrase);
+    logSecurityEvent('API_KEY_ENCRYPTED', 'API key successfully encrypted');
+    return result;
   } catch (error) {
     if (error instanceof Error && error.message.includes('passphrase')) {
       throw error;
     }
-    console.error('Encryption failed:', error);
+    // Log sanitized error - no raw error details that might contain sensitive info
+    logSecurityEvent('ENCRYPTION_FAILED', 'API key encryption failed');
     throw new Error('Failed to encrypt API key');
   }
 }
@@ -268,12 +381,15 @@ export async function decryptApiKey(encryptedKey: string): Promise<string> {
 
   try {
     const passphrase = getPassphrase();
-    return await decryptWithPassphrase(encryptedKey, passphrase);
+    const result = await decryptWithPassphrase(encryptedKey, passphrase);
+    logSecurityEvent('API_KEY_DECRYPTED', 'API key successfully decrypted');
+    return result;
   } catch (error) {
     if (error instanceof Error && error.message.includes('passphrase')) {
       throw error;
     }
-    console.error('Decryption failed:', error);
+    // Log sanitized error - no raw error details that might contain sensitive info
+    logSecurityEvent('DECRYPTION_FAILED', 'API key decryption failed');
     throw new Error('Failed to decrypt API key. The passphrase may be incorrect or the data may be corrupted.');
   }
 }

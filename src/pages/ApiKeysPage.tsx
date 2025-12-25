@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { isCryptoAvailable } from '@/lib/crypto';
+import { isCryptoAvailable, validatePassphraseComplexity } from '@/lib/crypto';
 import { Key, Eye, EyeOff, Trash2, Plus, AlertTriangle, Check, X, Lock, Unlock, ShieldAlert, RefreshCw, ShieldOff } from 'lucide-react';
 
 /**
@@ -176,7 +176,10 @@ export default function ApiKeysPage() {
   }
 
   const handleUnlockVault = async () => {
-    if (!passphrase) {
+    // Trim whitespace from passphrase
+    const trimmedPassphrase = passphrase.trim();
+
+    if (!trimmedPassphrase) {
       toast({
         title: "Passphrase Required",
         description: "Please enter a passphrase.",
@@ -185,18 +188,19 @@ export default function ApiKeysPage() {
       return;
     }
 
-    // For first-time setup, require confirmation
+    // For first-time setup, require confirmation and complexity
     if (!isVaultSetUp) {
-      if (passphrase.length < 8) {
+      const validation = validatePassphraseComplexity(trimmedPassphrase);
+      if (!validation.valid) {
         toast({
-          title: "Passphrase Too Short",
-          description: "Passphrase must be at least 8 characters.",
+          title: "Weak Passphrase",
+          description: validation.message,
           variant: "destructive",
         });
         return;
       }
 
-      if (passphrase !== confirmPassphrase) {
+      if (trimmedPassphrase !== confirmPassphrase.trim()) {
         toast({
           title: "Passphrases Don't Match",
           description: "Please make sure both passphrases match.",
@@ -208,7 +212,7 @@ export default function ApiKeysPage() {
 
     setIsUnlocking(true);
     try {
-      const success = await unlockVault(passphrase);
+      const success = await unlockVault(trimmedPassphrase);
       if (success) {
         setPassphrase('');
         setConfirmPassphrase('');
@@ -352,7 +356,11 @@ export default function ApiKeysPage() {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         Strength: {evaluatePassphraseStrength(passphrase).label || 'Too short'}
-                        {passphrase.length < 8 && ` (min 8 characters)`}
+                        {passphrase.trim().length < 8
+                          ? ' (min 8 characters)'
+                          : !validatePassphraseComplexity(passphrase).valid
+                            ? ' (need 2+ character types)'
+                            : ''}
                       </p>
                     </div>
                   )}

@@ -497,6 +497,8 @@ export async function translateResults(
 
   /**
    * Helper to translate an array of texts with rate limiting
+   * Uses Promise.allSettled for partial failure handling - failed translations
+   * are replaced with original text and logged
    */
   async function translateArray(texts: string[], targetLang: string): Promise<string[]> {
     const tasks = texts.map((text) =>
@@ -513,7 +515,20 @@ export async function translateResults(
         )
       )
     );
-    return Promise.all(tasks);
+
+    const results = await Promise.allSettled(tasks);
+
+    return results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        // Log failure but continue with original text
+        console.warn(
+          `Translation failed for item ${index + 1} to ${targetLang}: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}`
+        );
+        return texts[index]; // Fallback to original text
+      }
+    });
   }
 
   // Translate syntheses to each target language

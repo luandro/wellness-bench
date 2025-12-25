@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   setSessionPassphrase,
   clearSessionPassphrase,
@@ -9,7 +9,13 @@ import {
   encryptApiKey,
   decryptApiKey,
   isCryptoAvailable,
+  validatePassphraseComplexity,
+  getSecurityAuditLog,
 } from './crypto';
+
+// Test passphrases that meet complexity requirements (8+ chars, 2+ character types)
+const VALID_PASSPHRASE = 'TestPass123';
+const VALID_PASSPHRASE_ALT = 'Different1!';
 
 describe('crypto', () => {
   beforeEach(() => {
@@ -30,28 +36,71 @@ describe('crypto', () => {
     });
   });
 
+  describe('validatePassphraseComplexity', () => {
+    it('rejects passphrases shorter than 8 characters', () => {
+      const result = validatePassphraseComplexity('short');
+      expect(result.valid).toBe(false);
+      expect(result.message).toContain('8 characters');
+    });
+
+    it('rejects passphrases with only lowercase letters', () => {
+      const result = validatePassphraseComplexity('alllowercase');
+      expect(result.valid).toBe(false);
+      expect(result.message).toContain('2 of');
+    });
+
+    it('accepts passphrases with lowercase and numbers', () => {
+      const result = validatePassphraseComplexity('lowercase123');
+      expect(result.valid).toBe(true);
+    });
+
+    it('accepts passphrases with lowercase and uppercase', () => {
+      const result = validatePassphraseComplexity('LowerUpper');
+      expect(result.valid).toBe(true);
+    });
+
+    it('accepts passphrases with lowercase and special chars', () => {
+      const result = validatePassphraseComplexity('lower!!!');
+      expect(result.valid).toBe(true);
+    });
+
+    it('trims whitespace before validation', () => {
+      const result = validatePassphraseComplexity('  TestPass123  ');
+      expect(result.valid).toBe(true);
+    });
+  });
+
   describe('session passphrase management', () => {
     it('initially has no session passphrase', () => {
       expect(hasSessionPassphrase()).toBe(false);
     });
 
     it('sets and checks session passphrase', () => {
-      setSessionPassphrase('testpassphrase');
+      setSessionPassphrase(VALID_PASSPHRASE);
       expect(hasSessionPassphrase()).toBe(true);
     });
 
     it('clears session passphrase', () => {
-      setSessionPassphrase('testpassphrase');
+      setSessionPassphrase(VALID_PASSPHRASE);
       clearSessionPassphrase();
       expect(hasSessionPassphrase()).toBe(false);
     });
 
     it('rejects passphrases shorter than 8 characters', () => {
-      expect(() => setSessionPassphrase('short')).toThrow('Passphrase must be at least 8 characters');
+      expect(() => setSessionPassphrase('short')).toThrow('8 characters');
     });
 
-    it('accepts passphrases with exactly 8 characters', () => {
-      expect(() => setSessionPassphrase('12345678')).not.toThrow();
+    it('rejects passphrases without enough character variety', () => {
+      expect(() => setSessionPassphrase('alllowercase')).toThrow('2 of');
+    });
+
+    it('accepts valid passphrases', () => {
+      expect(() => setSessionPassphrase(VALID_PASSPHRASE)).not.toThrow();
+    });
+
+    it('trims whitespace from passphrases', () => {
+      setSessionPassphrase('  TestPass123  ');
+      expect(hasSessionPassphrase()).toBe(true);
     });
   });
 
@@ -59,40 +108,46 @@ describe('crypto', () => {
     it('creates verification token on first setup', async () => {
       expect(isPassphraseSetUp()).toBe(false);
 
-      const result = await initializePassphrase('testpassphrase');
+      const result = await initializePassphrase(VALID_PASSPHRASE);
       expect(result).toBe(true);
       expect(isPassphraseSetUp()).toBe(true);
       expect(hasSessionPassphrase()).toBe(true);
     });
 
     it('verifies correct passphrase on subsequent unlocks', async () => {
-      await initializePassphrase('testpassphrase');
+      await initializePassphrase(VALID_PASSPHRASE);
       clearSessionPassphrase();
 
-      const result = await initializePassphrase('testpassphrase');
+      const result = await initializePassphrase(VALID_PASSPHRASE);
       expect(result).toBe(true);
       expect(hasSessionPassphrase()).toBe(true);
     });
 
     it('rejects incorrect passphrase', async () => {
-      await initializePassphrase('testpassphrase');
+      await initializePassphrase(VALID_PASSPHRASE);
       clearSessionPassphrase();
 
-      const result = await initializePassphrase('wrongpassphrase');
+      const result = await initializePassphrase(VALID_PASSPHRASE_ALT);
       expect(result).toBe(false);
       expect(hasSessionPassphrase()).toBe(false);
     });
 
     it('rejects passphrase shorter than 8 characters', async () => {
       await expect(initializePassphrase('short')).rejects.toThrow(
-        'Passphrase must be at least 8 characters'
+        '8 characters'
+      );
+    });
+
+    it('rejects passphrase without complexity', async () => {
+      await expect(initializePassphrase('alllowercase')).rejects.toThrow(
+        '2 of'
       );
     });
   });
 
   describe('resetPassphrase', () => {
     it('clears verification token and session', async () => {
-      await initializePassphrase('testpassphrase');
+      await initializePassphrase(VALID_PASSPHRASE);
       expect(isPassphraseSetUp()).toBe(true);
 
       resetPassphrase();
@@ -102,9 +157,18 @@ describe('crypto', () => {
     });
   });
 
+  describe('security audit logging', () => {
+    it('logs security events', async () => {
+      await initializePassphrase(VALID_PASSPHRASE);
+      const log = getSecurityAuditLog();
+      expect(log.length).toBeGreaterThan(0);
+      expect(log.some(entry => entry.event === 'VAULT_CREATED')).toBe(true);
+    });
+  });
+
   describe('encryption and decryption', () => {
     beforeEach(async () => {
-      await initializePassphrase('testpassphrase');
+      await initializePassphrase(VALID_PASSPHRASE);
     });
 
     it('encrypts and decrypts an API key correctly', async () => {
@@ -146,7 +210,7 @@ describe('crypto', () => {
 
       // Reset and set up with different passphrase
       resetPassphrase();
-      await initializePassphrase('differentpass');
+      await initializePassphrase(VALID_PASSPHRASE_ALT);
 
       await expect(decryptApiKey(encrypted)).rejects.toThrow();
     });
