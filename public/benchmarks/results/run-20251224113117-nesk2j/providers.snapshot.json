@@ -1,0 +1,210 @@
+{
+  "$schema": "../schemas/providers.schema.json",
+  "version": "1.2.0",
+  "updated_at": "2025-12-23T00:00:00Z",
+  "providers": [
+    {
+      "provider_id": "openai",
+      "display_name": "OpenAI",
+      "enabled": true,
+      "base_url": "https://api.openai.com/v1",
+      "auth_type": "bearer",
+      "env_key_name": "OPENAI_API_KEY",
+      "models": [
+        {
+          "id": "gpt-5.2",
+          "name": "GPT-5.2",
+          "enabled": true,
+          "version": "2025-12-10",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "gpt-5",
+          "name": "GPT-5",
+          "enabled": false,
+          "version": "2025-08-07",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "anthropic",
+      "display_name": "Anthropic",
+      "enabled": true,
+      "base_url": "https://api.anthropic.com/v1",
+      "auth_type": "api-key",
+      "env_key_name": "ANTHROPIC_API_KEY",
+      "models": [
+        {
+          "id": "claude-4-5-opus",
+          "name": "Claude 4.5 Opus",
+          "enabled": true,
+          "version": "2025-11-24",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "claude-4-5-sonnet",
+          "name": "Claude 4.5 Sonnet",
+          "enabled": true,
+          "version": "2025-09-29",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "google",
+      "display_name": "Google",
+      "enabled": true,
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "auth_type": "api-key",
+      "env_key_name": "GOOGLE_API_KEY",
+      "models": [
+        {
+          "id": "gemini-3.0-pro",
+          "name": "Gemini 3.0 Pro",
+          "enabled": true,
+          "version": "2025-11-18",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "gemini-3.0-flash",
+          "name": "Gemini 3.0 Flash",
+          "enabled": true,
+          "version": "2025-11-18",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "grok",
+      "display_name": "Grok (xAI)",
+      "enabled": true,
+      "base_url": "https://api.x.ai/v1",
+      "auth_type": "bearer",
+      "env_key_name": "XAI_API_KEY",
+      "models": [
+        {
+          "id": "grok-4.1",
+          "name": "Grok 4.1",
+          "enabled": true,
+          "version": "2025-11-17",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "grok-4",
+          "name": "Grok 4",
+          "enabled": false,
+          "version": "2025-07-09",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "deepseek",
+      "display_name": "DeepSeek",
+      "enabled": true,
+      "base_url": "https://api.deepseek.com/v1",
+      "auth_type": "bearer",
+      "env_key_name": "DEEPSEEK_API_KEY",
+      "models": [
+        {
+          "id": "deepseek-v3",
+          "name": "DeepSeek V3",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "deepseek-r2",
+          "name": "DeepSeek R2 (Agent)",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "deepseek-m",
+          "name": "DeepSeek M (Multimodal)",
+          "enabled": false,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        }
+      ]
+    },
+    {
+      "provider_id": "openrouter",
+      "display_name": "OpenRouter",
+      "enabled": true,
+      "base_url": "https://openrouter.ai/api/v1",
+      "auth_type": "bearer",
+      "env_key_name": "OPENROUTER_API_KEY",
+      "models": [
+        {
+          "id": "anthropic/claude-3.5-sonnet",
+          "name": "Claude 3.5 Sonnet (via OpenRouter)",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "openai/gpt-4o",
+          "name": "GPT-4o (via OpenRouter)",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "google/gemini-pro-1.5",
+          "name": "Gemini Pro 1.5 (via OpenRouter)",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        },
+        {
+          "id": "deepseek/deepseek-chat",
+          "name": "DeepSeek V3 (via OpenRouter)",
+          "enabled": true,
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 8192
+          }
+        }
+      ]
+    }
+  ]
+}

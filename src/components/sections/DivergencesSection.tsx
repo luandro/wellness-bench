@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useBenchmark } from '@/contexts/BenchmarkContext';
 import { RandomUnderline } from '../ui/random-underline';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchResults } from '@/lib/basePath';
 import type { PerQuestionResult, PerModelResult } from '@/types/benchmark';
 import {
@@ -38,7 +39,7 @@ const biasTypeTooltips = {
 };
 
 export const DivergencesSection = () => {
-  const { runDetails, biasFilters, anyBiasFilterActive } = useBenchmark();
+  const { runDetails, isLoading: isCatalogLoading, biasFilters, anyBiasFilterActive } = useBenchmark();
   const [questionResults, setQuestionResults] = useState<Record<string, PerQuestionResult>>({});
   const [modelDetails, setModelDetails] = useState<Record<string, PerModelResult>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -139,7 +140,26 @@ export const DivergencesSection = () => {
     return quote.biasCategories.some(cat => biasFilters[cat as keyof typeof biasFilters]);
   };
 
-  if (!runDetails || (divergenceData.length === 0 && !isLoading)) return null;
+  if (isCatalogLoading) {
+    return (
+      <section className="section-container py-32">
+        <Skeleton className="h-12 w-64 mx-auto mb-16" />
+        <div className="space-y-16">
+          {[1, 2].map(i => (
+            <div key={i} className="space-y-6">
+              <Skeleton className="h-8 w-48" />
+              <div className="grid md:grid-cols-2 gap-6">
+                <Skeleton className="h-40 w-full rounded-xl" />
+                <Skeleton className="h-40 w-full rounded-xl" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (!runDetails) return null;
 
   return (
     <TooltipProvider>
@@ -159,7 +179,7 @@ export const DivergencesSection = () => {
             <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Analyzing model divergences...</p>
           </div>
-        ) : (
+        ) : divergenceData.length > 0 ? (
           /* Divergence blocks */
           <div className="space-y-16">
             {divergenceData.map((block, index) => (
@@ -226,6 +246,12 @@ export const DivergencesSection = () => {
                 </div>
               </article>
             ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-muted/30 rounded-2xl border border-dashed border-border/60">
+            <p className="text-muted-foreground max-w-sm mx-auto italic">
+              Comparative analysis is only available when multiple models are selected for a benchmark run.
+            </p>
           </div>
         )}
       </section>

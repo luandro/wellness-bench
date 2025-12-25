@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,13 @@ import { cn } from '@/lib/utils';
 
 interface QuestionResultsProps {
   question: Question;
+}
+
+/**
+ * Sanitize an ID for use in a filename or key
+ */
+function sanitizeId(id: string): string {
+  return id.replace(/\//g, '__');
 }
 
 export function QuestionResults({ question }: QuestionResultsProps) {
@@ -47,10 +54,13 @@ export function QuestionResults({ question }: QuestionResultsProps) {
     loadData();
   }, [runDetails, question.id]);
 
-  const loadModelDetail = async (providerId: string, modelId: string) => {
+  const loadModelDetail = useCallback(async (providerId: string, modelId: string) => {
     if (!runDetails || !questionData) return;
     
-    const key = `${providerId}__${modelId}`;
+    const safeProviderId = sanitizeId(providerId);
+    const safeModelId = sanitizeId(modelId);
+    const key = `${safeProviderId}__${safeModelId}`;
+    
     if (modelData[key]) return; // Already loaded
     
     try {
@@ -62,7 +72,15 @@ export function QuestionResults({ question }: QuestionResultsProps) {
     } catch (err) {
       console.error(`Failed to load model details for ${key}:`, err);
     }
-  };
+  }, [runDetails, questionData, question.id, modelData]);
+
+  // Automatically load the first model's details
+  useEffect(() => {
+    if (questionData && questionData.models.length > 0) {
+      const firstModel = questionData.models[0];
+      loadModelDetail(firstModel.provider_id, firstModel.model_id);
+    }
+  }, [questionData, loadModelDetail]);
 
   const toggleSection = (key: string) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -151,18 +169,23 @@ export function QuestionResults({ question }: QuestionResultsProps) {
       {/* Provider Results Tabs */}
       <Card className="card-elevated">
         <Tabs 
-          defaultValue={`${questionData.models[0].provider_id}__${questionData.models[0].model_id}`}
+          defaultValue={`${sanitizeId(questionData.models[0].provider_id)}__${sanitizeId(questionData.models[0].model_id)}`}
           onValueChange={(value) => {
-            const [pId, mId] = value.split('__');
-            loadModelDetail(pId, mId);
+            // Find the original model based on sanitized ID match
+            const model = questionData.models.find(m => 
+              `${sanitizeId(m.provider_id)}__${sanitizeId(m.model_id)}` === value
+            );
+            if (model) {
+              loadModelDetail(model.provider_id, model.model_id);
+            }
           }}
         >
           <CardHeader>
             <TabsList className="w-full justify-start bg-muted/50 p-1 flex-wrap h-auto gap-1">
               {questionData.models.map((model) => (
                 <TabsTrigger
-                  key={`${model.provider_id}__${model.model_id}`}
-                  value={`${model.provider_id}__${model.model_id}`}
+                  key={`${sanitizeId(model.provider_id)}__${sanitizeId(model.model_id)}`}
+                  value={`${sanitizeId(model.provider_id)}__${sanitizeId(model.model_id)}`}
                   className="data-[state=active]:bg-background"
                 >
                   {model.display_name}
@@ -173,7 +196,9 @@ export function QuestionResults({ question }: QuestionResultsProps) {
           
           <CardContent>
             {questionData.models.map((modelSummary) => {
-              const key = `${modelSummary.provider_id}__${modelSummary.model_id}`;
+              const safePId = sanitizeId(modelSummary.provider_id);
+              const safeMId = sanitizeId(modelSummary.model_id);
+              const key = `${safePId}__${safeMId}`;
               const result = modelData[key];
               
               return (
@@ -293,41 +318,6 @@ export function QuestionResults({ question }: QuestionResultsProps) {
           </CardContent>
         </Tabs>
       </Card>
-    </div>
-  );
-}
-
-interface CollapsibleSectionProps {
-  title: string;
-  isExpanded?: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-  variant?: 'default' | 'warning';
-}
-
-function CollapsibleSection({ title, isExpanded = false, onToggle, children, variant = 'default' }: CollapsibleSectionProps) {
-  return (
-    <div className="border border-border rounded-lg overflow-hidden">
-      <button
-        onClick={onToggle}
-        className={cn(
-          "w-full px-4 py-3 flex items-center justify-between text-left transition-colors",
-          "hover:bg-muted/50",
-          variant === 'warning' && "bg-warning/5"
-        )}
-      >
-        <span className="font-medium text-sm">{title}</span>
-        {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        )}
-      </button>
-      {isExpanded && (
-        <div className="px-4 py-3 border-t border-border animate-fade-in">
-          {children}
-        </div>
-      )}
     </div>
   );
 }

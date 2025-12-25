@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Circle, Loader2 } from 'lucide-react';
 import { RandomUnderline } from '../ui/random-underline';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useBenchmark } from '@/contexts/BenchmarkContext';
 import { fetchResults } from '@/lib/basePath';
 import type { PerQuestionResult } from '@/types/benchmark';
@@ -11,7 +12,7 @@ interface ThemeCluster {
 }
 
 export const CommonGroundSection = () => {
-  const { runDetails } = useBenchmark();
+  const { runDetails, isLoading: isCatalogLoading } = useBenchmark();
   const [questionResults, setQuestionResults] = useState<Record<string, PerQuestionResult>>({});
   const [isLoading, setIsLoading] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
@@ -77,7 +78,20 @@ export const CommonGroundSection = () => {
     return () => observer.disconnect();
   }, []);
 
-  if (!runDetails || (commonGroundData.length === 0 && !isLoading)) return null;
+  if (isCatalogLoading) {
+    return (
+      <section className="section-wide py-32 bg-muted/5">
+        <div className="max-w-4xl mx-auto px-6">
+          <Skeleton className="h-12 w-64 mx-auto mb-16" />
+          <div className="grid md:grid-cols-2 gap-8">
+            {[1, 2, 4, 4].map(i => <Skeleton key={i} className="h-48 w-full rounded-2xl" />)}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!runDetails) return null;
 
   return (
     <section 
@@ -101,7 +115,7 @@ export const CommonGroundSection = () => {
             <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Synthesizing consensus...</p>
           </div>
-        ) : (
+        ) : commonGroundData.length > 0 ? (
           /* Theme clusters */
           <div className="grid md:grid-cols-2 gap-8">
             {commonGroundData.map((cluster, index) => (
@@ -127,10 +141,16 @@ export const CommonGroundSection = () => {
               </div>
             ))}
           </div>
+        ) : (
+          <div className="text-center py-12 bg-card rounded-2xl border border-dashed border-border/60">
+            <p className="text-muted-foreground max-w-sm mx-auto italic">
+              Consensus analysis is unavailable for single-model runs. Run multiple models to see cross-model commonalities.
+            </p>
+          </div>
         )}
 
         {/* Meta note */}
-        {!isLoading && (
+        {!isLoading && commonGroundData.length > 0 && (
           <p className="animate-on-scroll text-center text-sm text-muted-foreground/70 mt-12 italic">
             These shared observations form a baseline — the divergences are where ideology becomes visible.
           </p>

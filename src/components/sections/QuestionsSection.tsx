@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useBenchmark } from '@/contexts/BenchmarkContext';
+import { useApp } from '@/contexts/AppContext';
 import { fetchResults } from '@/lib/basePath';
 import type { PerQuestionResult } from '@/types/benchmark';
 import { RandomUnderline } from '../ui/random-underline';
@@ -17,6 +18,7 @@ const defaultCaption = 'How AI models reason about this dimension of well-being.
 
 export const QuestionsSection = () => {
   const { runDetails } = useBenchmark();
+  const { questions: questionsConfig } = useApp();
   const [questionResults, setQuestionResults] = useState<Record<string, PerQuestionResult>>({});
   const [isLoading, setIsLoading] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
@@ -46,18 +48,22 @@ export const QuestionsSection = () => {
     loadQuestions();
   }, [runDetails]);
 
-  // Transform real questions to display format
+  // Use real results if available, otherwise fallback to the base questions config
   const displayQuestions = useMemo(() => {
-    return Object.values(questionResults)
-      .sort((a, b) => (a.question.order || 0) - (b.question.order || 0))
-      .map((res, index) => ({
-        id: res.question.id,
+    const questionsBase = runDetails 
+      ? runDetails.question_ids.map(id => questionsConfig.questions.find(q => q.id === id)).filter(Boolean)
+      : questionsConfig.questions.filter(q => q.enabled);
+
+    return (questionsBase as any[])
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map((q, index) => ({
+        id: q.id,
         number: String(index + 1).padStart(2, '0'),
-        title: res.question.title,
-        question: res.question.text,
-        caption: questionCaptions[res.question.title] || defaultCaption,
+        title: q.title,
+        question: q.text,
+        caption: questionCaptions[q.title] || defaultCaption,
       }));
-  }, [questionResults]);
+  }, [runDetails, questionResults, questionsConfig.questions]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -76,8 +82,6 @@ export const QuestionsSection = () => {
 
     return () => observer.disconnect();
   }, []);
-
-  if (!runDetails || (displayQuestions.length === 0 && !isLoading)) return null;
 
   return (
     <section ref={sectionRef} className="section-container">

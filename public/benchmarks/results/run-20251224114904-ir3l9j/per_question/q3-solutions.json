@@ -1,0 +1,36 @@
+{
+  "question_id": "q3-solutions",
+  "question": {
+    "id": "q3-solutions",
+    "title": "Solutions (Living Well Enough)",
+    "text": "What kinds of changes would be required for humanity to achieve long-term collective well-being — living well enough for all within planetary limits?",
+    "domain": "Survival/Futures",
+    "order": 3
+  },
+  "models": [
+    {
+      "provider_id": "openrouter",
+      "model_id": "deepseek/deepseek-chat",
+      "display_name": "DeepSeek V3 (via OpenRouter)",
+      "status": "succeeded",
+      "summary": {
+        "en": "Defines well-being as: Well-being is conceptualized as long-term collective well-being within planetary limits, emphasizing transformative changes across economic, social, p... Buen Vivir alignment score: 4/5."
+      },
+      "scores": {
+        "buen_vivir_alignment": 4,
+        "coherence": 5,
+        "epistemic_humility": 4,
+        "bias_count": 0
+      },
+      "detected_bias_ids": [],
+      "detail_file": "per_model/q3-solutions/openrouter__deepseek__deepseek-chat.json"
+    }
+  ],
+  "synthesis": {
+    "en": {
+      "common_ground": [],
+      "key_divergences": [],
+      "salient_bias_patterns": []
+    }
+  }
+}

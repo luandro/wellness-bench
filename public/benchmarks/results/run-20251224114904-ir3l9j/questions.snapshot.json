@@ -1,0 +1,53 @@
+{
+  "$schema": "../schemas/questions.schema.json",
+  "version": "1.0.0",
+  "updated_at": "2024-01-01T00:00:00Z",
+  "domains": [
+    "Well-being",
+    "Survival/Futures",
+    "Power/Inequality",
+    "Technology/AI",
+    "Ecology/Limits"
+  ],
+  "questions": [
+    {
+      "id": "q1-diagnosis",
+      "title": "Diagnosis",
+      "text": "What are the most important factors currently undermining long-term human and planetary well-being, and why?",
+      "domain": "Well-being",
+      "order": 1,
+      "enabled": true,
+      "tags": [
+        "core",
+        "diagnosis",
+        "systemic"
+      ]
+    },
+    {
+      "id": "q2-causality",
+      "title": "Causality & Responsibility",
+      "text": "If humanity has long been aware of these challenges, why have they not been meaningfully addressed?",
+      "domain": "Power/Inequality",
+      "order": 2,
+      "enabled": true,
+      "tags": [
+        "core",
+        "causality",
+        "power"
+      ]
+    },
+    {
+      "id": "q3-solutions",
+      "title": "Solutions (Living Well Enough)",
+      "text": "What kinds of changes would be required for humanity to achieve long-term collective well-being — living well enough for all within planetary limits?",
+      "domain": "Survival/Futures",
+      "order": 3,
+      "enabled": true,
+      "tags": [
+        "core",
+        "solutions",
+        "transformation"
+      ]
+    }
+  ]
+}
