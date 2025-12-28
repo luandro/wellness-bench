@@ -16,6 +16,11 @@ dist-ssr
 benchmarks/results/*
 !benchmarks/results/README.md
 
+# Test artifacts
+test-results
+playwright-report
+playwright/.cache
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
