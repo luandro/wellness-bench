@@ -1,7 +1,7 @@
 {
   "$schema": "../schemas/providers.schema.json",
-  "version": "1.2.0",
-  "updated_at": "2025-12-23T00:00:00Z",
+  "version": "1.4.0",
+  "updated_at": "2025-12-28T16:53:00Z",
   "providers": [
     {
       "provider_id": "openai",
@@ -18,7 +18,7 @@
           "version": "2025-12-10",
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         },
         {
@@ -28,7 +28,17 @@
           "version": "2025-08-07",
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
+          }
+        },
+        {
+          "id": "gpt-5-2025-08-07",
+          "name": "GPT-5 (2025-08-07)",
+          "enabled": false,
+          "version": "2025-08-07",
+          "default_params": {
+            "temperature": 0.7,
+            "max_tokens": 2048
           }
         }
       ]
@@ -42,23 +52,23 @@
       "env_key_name": "ANTHROPIC_API_KEY",
       "models": [
         {
-          "id": "claude-4-5-opus",
-          "name": "Claude 4.5 Opus",
+          "id": "claude-opus-4-5",
+          "name": "Claude Opus 4.5",
           "enabled": true,
-          "version": "2025-11-24",
+          "version": "2025-11-01",
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         },
         {
-          "id": "claude-4-5-sonnet",
-          "name": "Claude 4.5 Sonnet",
-          "enabled": true,
-          "version": "2025-09-29",
+          "id": "claude-opus-4-5-20251101",
+          "name": "Claude Opus 4.5 (20251101)",
+          "enabled": false,
+          "version": "2025-11-01",
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         }
       ]
@@ -72,23 +82,13 @@
       "env_key_name": "GOOGLE_API_KEY",
       "models": [
         {
-          "id": "gemini-3.0-pro",
-          "name": "Gemini 3.0 Pro",
+          "id": "gemini-3-pro-preview",
+          "name": "Gemini 3 Pro Preview",
           "enabled": true,
           "version": "2025-11-18",
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
-          }
-        },
-        {
-          "id": "gemini-3.0-flash",
-          "name": "Gemini 3.0 Flash",
-          "enabled": true,
-          "version": "2025-11-18",
-          "default_params": {
-            "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         }
       ]
@@ -102,23 +102,23 @@
       "env_key_name": "XAI_API_KEY",
       "models": [
         {
-          "id": "grok-4.1",
-          "name": "Grok 4.1",
+          "id": "grok-4",
+          "name": "Grok 4",
           "enabled": true,
-          "version": "2025-11-17",
+          "version": "2025-07-09",
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         },
         {
-          "id": "grok-4",
-          "name": "Grok 4",
+          "id": "grok-4-0709",
+          "name": "Grok 4 (0709)",
           "enabled": false,
           "version": "2025-07-09",
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         }
       ]
@@ -132,30 +132,21 @@
       "env_key_name": "DEEPSEEK_API_KEY",
       "models": [
         {
-          "id": "deepseek-v3",
-          "name": "DeepSeek V3",
+          "id": "deepseek-chat",
+          "name": "DeepSeek Chat",
           "enabled": true,
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         },
         {
-          "id": "deepseek-r2",
-          "name": "DeepSeek R2 (Agent)",
+          "id": "deepseek-reasoner",
+          "name": "DeepSeek Reasoner",
           "enabled": true,
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
-          }
-        },
-        {
-          "id": "deepseek-m",
-          "name": "DeepSeek M (Multimodal)",
-          "enabled": false,
-          "default_params": {
-            "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         }
       ]
@@ -174,34 +165,34 @@
           "enabled": true,
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         },
         {
-          "id": "openai/gpt-4o",
-          "name": "GPT-4o (via OpenRouter)",
+          "id": "google/gemini-2.5-flash",
+          "name": "Gemini 2.5 Flash (via OpenRouter)",
           "enabled": true,
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         },
         {
-          "id": "google/gemini-pro-1.5",
-          "name": "Gemini Pro 1.5 (via OpenRouter)",
+          "id": "x-ai/grok-beta",
+          "name": "Grok Beta (via OpenRouter)",
           "enabled": true,
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         },
         {
-          "id": "deepseek/deepseek-chat",
-          "name": "DeepSeek V3 (via OpenRouter)",
+          "id": "x-ai/grok-4-fast",
+          "name": "Grok 4 Fast (via OpenRouter)",
           "enabled": true,
           "default_params": {
             "temperature": 0.7,
-            "max_tokens": 8192
+            "max_tokens": 2048
           }
         }
       ]
