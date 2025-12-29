@@ -31,6 +31,10 @@ import {
   validateProviderKeys,
   getSupportedProviders,
 } from '../providers/index.js';
+import {
+  filterRunPlan,
+  printSkipSummary,
+} from './skip-existing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -55,6 +59,7 @@ interface CliOptions {
   providers?: string;
   models?: string;
   questions?: string;
+  override: boolean;
   help: boolean;
 }
 
@@ -73,6 +78,7 @@ Options:
   --providers <list>    Comma-separated list of providers to run
   --models <list>       Comma-separated list of model IDs to run
   --questions <list>    Comma-separated list of question IDs to run
+  --override            Override and re-run already-completed evaluations (default: skip existing)
   --help                Show this help message
 
 Environment Variables:
@@ -83,22 +89,30 @@ Environment Variables:
   DEEPSEEK_API_KEY      DeepSeek API key
   OPENROUTER_API_KEY    OpenRouter API key (can be used as fallback for all others)
 
-Examples:  # Run with default config
+Examples:
+  # Run benchmark (automatically skips completed evaluations)
   pnpm run benchmark
+
+  # Preview what will run without executing
+  pnpm run benchmark -- --dryRun
+
+  # Run only specific providers (still skips completed)
+  pnpm run benchmark -- --providers openai,anthropic
+
+  # Force re-run all evaluations including completed ones
+  pnpm run benchmark -- --override
 
   # Run with custom config
   pnpm run benchmark -- --runConfig my-config.json
-
-  # Dry run to see plan
-  pnpm run benchmark -- --dryRun
-
-  # Run only specific providers
-  pnpm run benchmark -- --providers openai,anthropic
 `);
 }
 
 function parseCliArgs(): CliOptions {
+  // Filter out the initial '--' separator that pnpm adds
+  const args = process.argv.slice(2).filter(arg => arg !== '--');
+
   const { values } = parseArgs({
+    args,
     options: {
       runConfig: { type: 'string' },
       configDir: { type: 'string' },
@@ -107,6 +121,7 @@ function parseCliArgs(): CliOptions {
       providers: { type: 'string' },
       models: { type: 'string' },
       questions: { type: 'string' },
+      override: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
     strict: true,
@@ -120,6 +135,7 @@ function parseCliArgs(): CliOptions {
     providers: values.providers,
     models: values.models,
     questions: values.questions,
+    override: values.override ?? false,
     help: values.help ?? false,
   };
 }
@@ -141,6 +157,7 @@ function createProgressLogger(verbose: boolean) {
 
 async function main(): Promise<void> {
   const startTime = Date.now();
+  const rootDir = resolve(__dirname, '../..');
   let options: CliOptions | undefined;
 
   try {
@@ -205,13 +222,32 @@ async function main(): Promise<void> {
 
     // Create run plan
     console.log('\nCreating run plan...');
-    const plan = createRunPlan(
+    let plan = createRunPlan(
       configs.runConfig,
       configs.questions,
       configs.providers
     );
 
-    printRunPlanSummary(plan);
+    // Skip existing results by default (unless --override is specified)
+    if (!options.override) {
+      const originalPlan = plan;
+      const { filteredPlan, skippedCount, completedKeys } = await filterRunPlan(plan, rootDir);
+      plan = filteredPlan;
+
+      printSkipSummary(originalPlan, filteredPlan, skippedCount);
+
+      if (plan.total_evaluations === 0) {
+        console.log('✅ All evaluations already completed. Nothing to run.\n');
+        console.log('Use --override to re-run all evaluations.\n');
+        process.exit(0);
+      }
+
+      // Note: completedKeys available for future pipeline skip logic if needed
+      // Currently the plan is pre-filtered, but pipeline could double-check
+    } else {
+      console.log('\n⚠️  Override mode: Will re-run all evaluations including completed ones.\n');
+      printRunPlanSummary(plan);
+    }
 
     if (options.dryRun) {
       console.log('Dry run mode - exiting without executing.\n');
@@ -346,7 +382,6 @@ async function main(): Promise<void> {
 
     // Generate output bundle
     console.log('\nGenerating output bundle...');
-    const rootDir = resolve(__dirname, '../..');
     const { runDir, indexPath } = await generateOutputBundle(
       plan,
       items,
