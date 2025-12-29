@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Circle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RandomUnderline } from '../ui/random-underline';
@@ -317,9 +318,11 @@ export const ModelDeepDiveSection = () => {
                         <span className="text-sm font-medium">Full Answer</span>
                       </AccordionTrigger>
                       <AccordionContent className="pt-2 pb-4">
-                        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                          {displayModel.fullAnswer}
-                        </p>
+                        <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground prose-headings:font-medium prose-a:text-primary hover:prose-a:underline">
+                          <ReactMarkdown>
+                            {displayModel.fullAnswer}
+                          </ReactMarkdown>
+                        </div>
                       </AccordionContent>
                     </AccordionItem>
                   )}
