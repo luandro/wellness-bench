@@ -1,10 +1,6 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
-import { useBenchmark } from '@/contexts/BenchmarkContext';
+import { useEffect, useRef, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { fetchResults } from '@/lib/basePath';
-import type { PerQuestionResult } from '@/types/benchmark';
 import { RandomUnderline } from '../ui/random-underline';
-import { Loader2 } from 'lucide-react';
 
 // Caption metadata for display - maps question titles to descriptive captions
 const questionCaptions: Record<string, string> = {
@@ -17,44 +13,22 @@ const questionCaptions: Record<string, string> = {
 const defaultCaption = 'How AI models reason about this dimension of well-being.';
 
 export const QuestionsSection = () => {
-  const { runDetails } = useBenchmark();
   const { questions: questionsConfig } = useApp();
-  const [questionResults, setQuestionResults] = useState<Record<string, PerQuestionResult>>({});
-  const [isLoading, setIsLoading] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    const loadQuestions = async () => {
-      if (!runDetails) return;
-      
-      setIsLoading(true);
-      try {
-        const results: Record<string, PerQuestionResult> = {};
-        for (const qId of runDetails.question_ids) {
-          const path = runDetails.file_map.per_question[qId];
-          if (path) {
-            const data = await fetchResults<PerQuestionResult>(`${runDetails.run_id}/${path}`);
-            results[qId] = data;
-          }
-        }
-        setQuestionResults(results);
-      } catch (err) {
-        console.error('Failed to load questions for section:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadQuestions();
-  }, [runDetails]);
-
-  // Use real results if available, otherwise fallback to the base questions config
+  // Questions are static and should always display - use enabled questions from config
   const displayQuestions = useMemo(() => {
-    const questionsBase = runDetails 
-      ? runDetails.question_ids.map(id => questionsConfig.questions.find(q => q.id === id)).filter(Boolean)
-      : questionsConfig.questions.filter(q => q.enabled);
+    // Safeguard against missing config
+    if (!questionsConfig?.questions) {
+      console.warn('QuestionsSection: questionsConfig.questions is not available');
+      return [];
+    }
 
-    return (questionsBase as any[])
+    // Always show enabled questions from config (static content)
+    // runDetails only affects other sections that show benchmark results
+    const questionsBase = questionsConfig.questions.filter(q => q.enabled);
+
+    return questionsBase
       .sort((a, b) => (a.order || 0) - (b.order || 0))
       .map((q, index) => ({
         id: q.id,
@@ -63,7 +37,7 @@ export const QuestionsSection = () => {
         question: q.text,
         caption: questionCaptions[q.title] || defaultCaption,
       }));
-  }, [runDetails, questionResults, questionsConfig.questions]);
+  }, [questionsConfig]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -95,9 +69,14 @@ export const QuestionsSection = () => {
         </p>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+      {displayQuestions.length === 0 ? (
+        <div className="text-center py-12 bg-card rounded-2xl border border-dashed border-border/60">
+          <p className="text-muted-foreground max-w-sm mx-auto mb-4">
+            No questions configured.
+          </p>
+          <p className="text-sm text-muted-foreground/70 max-w-md mx-auto">
+            Questions should be automatically loaded from the configuration. If you're seeing this message, please check the console for errors.
+          </p>
         </div>
       ) : (
         /* Question cards */

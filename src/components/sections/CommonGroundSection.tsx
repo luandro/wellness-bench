@@ -78,24 +78,13 @@ export const CommonGroundSection = () => {
     return () => observer.disconnect();
   }, []);
 
-  if (isCatalogLoading) {
-    return (
-      <section className="section-wide py-32 bg-muted/5">
-        <div className="max-w-4xl mx-auto px-6">
-          <Skeleton className="h-12 w-64 mx-auto mb-16" />
-          <div className="grid md:grid-cols-2 gap-8">
-            {[1, 2, 4, 4].map(i => <Skeleton key={i} className="h-48 w-full rounded-2xl" />)}
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  if (!runDetails) return null;
+  const showSkeleton = isCatalogLoading;
+  const showEmptyState = !isCatalogLoading && !runDetails;
+  const showContent = !isCatalogLoading && runDetails;
 
   return (
-    <section 
-      ref={sectionRef} 
+    <section
+      ref={sectionRef}
       className="section-wide py-32"
       style={{ background: 'var(--gradient-section)' }}
     >
@@ -110,7 +99,20 @@ export const CommonGroundSection = () => {
           </p>
         </div>
 
-        {isLoading ? (
+        {showSkeleton ? (
+          <div className="grid md:grid-cols-2 gap-8">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-48 w-full rounded-2xl" />)}
+          </div>
+        ) : showEmptyState ? (
+          <div className="text-center py-12 bg-card rounded-2xl border border-dashed border-border/60">
+            <p className="text-muted-foreground max-w-sm mx-auto mb-4">
+              No benchmark data available yet.
+            </p>
+            <p className="text-sm text-muted-foreground/70 max-w-md mx-auto">
+              Select a benchmark run from the timeline above, or run your first benchmark to see consensus analysis.
+            </p>
+          </div>
+        ) : isLoading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Synthesizing consensus...</p>

@@ -187,28 +187,13 @@ export const ModelDeepDiveSection = () => {
     epistemicHumility: currentDetails?.evaluations?.step_e?.explanation,
   } : null;
 
-  if (isCatalogLoading || (isLoading && !currentDetails)) {
-    return (
-      <section className="section-wide py-32 bg-muted/5">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <Skeleton className="h-12 w-64 mx-auto mb-4" />
-            <Skeleton className="h-6 w-full max-w-2xl mx-auto" />
-          </div>
-          <div className="flex justify-center gap-2 mb-12">
-            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-24 rounded-xl" />)}
-          </div>
-          <Skeleton className="h-96 w-full rounded-2xl" />
-        </div>
-      </section>
-    );
-  }
-
-  if (!runDetails || models.length === 0) return null;
+  const showSkeleton = isCatalogLoading || (isLoading && !currentDetails);
+  const showEmptyState = !isCatalogLoading && (!runDetails || models.length === 0);
+  const showContent = !isCatalogLoading && runDetails && models.length > 0;
 
   return (
-    <section 
-      ref={sectionRef} 
+    <section
+      ref={sectionRef}
       className="section-wide py-32"
       style={{ background: 'var(--gradient-section)' }}
     >
@@ -223,9 +208,27 @@ export const ModelDeepDiveSection = () => {
           </p>
         </div>
 
-        {/* Model tabs with logos */}
-        <div className="animate-on-scroll flex flex-wrap justify-center gap-2 mb-12">
-          {models.map((model) => (
+        {showSkeleton ? (
+          <>
+            <div className="flex justify-center gap-2 mb-12">
+              {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-24 rounded-xl" />)}
+            </div>
+            <Skeleton className="h-96 w-full rounded-2xl" />
+          </>
+        ) : showEmptyState ? (
+          <div className="text-center py-12 bg-card rounded-2xl border border-dashed border-border/60">
+            <p className="text-muted-foreground max-w-sm mx-auto mb-4">
+              No model data available yet.
+            </p>
+            <p className="text-sm text-muted-foreground/70 max-w-md mx-auto">
+              Select a benchmark run from the timeline above, or run your first benchmark to see detailed model analysis.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Model tabs with logos */}
+            <div className="animate-on-scroll flex flex-wrap justify-center gap-2 mb-12">
+              {models.map((model) => (
             <button
               key={model.id}
               onClick={() => setActiveModelKey(model.id)}
@@ -363,6 +366,8 @@ export const ModelDeepDiveSection = () => {
               </>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
     </section>

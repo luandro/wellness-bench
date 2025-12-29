@@ -140,26 +140,9 @@ export const DivergencesSection = () => {
     return quote.biasCategories.some(cat => biasFilters[cat as keyof typeof biasFilters]);
   };
 
-  if (isCatalogLoading) {
-    return (
-      <section className="section-container py-32">
-        <Skeleton className="h-12 w-64 mx-auto mb-16" />
-        <div className="space-y-16">
-          {[1, 2].map(i => (
-            <div key={i} className="space-y-6">
-              <Skeleton className="h-8 w-48" />
-              <div className="grid md:grid-cols-2 gap-6">
-                <Skeleton className="h-40 w-full rounded-xl" />
-                <Skeleton className="h-40 w-full rounded-xl" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  if (!runDetails) return null;
+  const showSkeleton = isCatalogLoading;
+  const showEmptyState = !isCatalogLoading && !runDetails;
+  const showContent = !isCatalogLoading && runDetails;
 
   return (
     <TooltipProvider>
@@ -174,7 +157,28 @@ export const DivergencesSection = () => {
           </p>
         </div>
 
-        {isLoading ? (
+        {showSkeleton ? (
+          <div className="space-y-16">
+            {[1, 2].map(i => (
+              <div key={i} className="space-y-6">
+                <Skeleton className="h-8 w-48" />
+                <div className="grid md:grid-cols-2 gap-6">
+                  <Skeleton className="h-40 w-full rounded-xl" />
+                  <Skeleton className="h-40 w-full rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : showEmptyState ? (
+          <div className="text-center py-12 bg-card rounded-2xl border border-dashed border-border/60">
+            <p className="text-muted-foreground max-w-sm mx-auto mb-4">
+              No benchmark data available yet.
+            </p>
+            <p className="text-sm text-muted-foreground/70 max-w-md mx-auto">
+              Select a benchmark run from the timeline above, or run your first benchmark to see divergence analysis.
+            </p>
+          </div>
+        ) : isLoading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Analyzing model divergences...</p>
