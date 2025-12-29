@@ -1,7 +1,23 @@
 {
   "version": "1.0.0",
-  "updated_at": "2025-12-24T11:52:07.869Z",
+  "updated_at": "2025-12-28T16:09:19.314Z",
   "runs": [
+    {
+      "run_id": "run-20251228155558-ee3540",
+      "run_name": "Default Benchmark Run",
+      "run_description": "Standard benchmark run with all enabled questions and models",
+      "created_at": "2025-12-28T15:55:58.137Z",
+      "completed_at": "2025-12-28T16:09:19.314Z",
+      "status": "partial",
+      "git_sha": "eaa4290c32b25044f40160dd1aff63eb051ac1e9",
+      "languages": [
+        "en",
+        "pt-BR"
+      ],
+      "question_count": 3,
+      "model_count": 2,
+      "path": "run-20251228155558-ee3540"
+    },
     {
       "run_id": "run-20251224114904-ir3l9j",
       "run_name": "Default Benchmark Run",
