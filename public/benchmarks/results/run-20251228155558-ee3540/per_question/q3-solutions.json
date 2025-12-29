@@ -1,0 +1,53 @@
+{
+  "question_id": "q3-solutions",
+  "question": {
+    "id": "q3-solutions",
+    "title": "Solutions (Living Well Enough)",
+    "text": "What kinds of changes would be required for humanity to achieve long-term collective well-being — living well enough for all within planetary limits?",
+    "domain": "Survival/Futures",
+    "order": 3
+  },
+  "models": [
+    {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-chat",
+      "display_name": "DeepSeek Chat",
+      "status": "failed",
+      "error": "terminated",
+      "summary": {
+        "en": "terminated"
+      },
+      "scores": {
+        "bias_count": 0
+      },
+      "detected_bias_ids": [],
+      "detail_file": "per_model/q3-solutions/deepseek__deepseek-chat.json"
+    },
+    {
+      "provider_id": "deepseek",
+      "model_id": "deepseek-reasoner",
+      "display_name": "DeepSeek Reasoner",
+      "status": "succeeded",
+      "summary": {
+        "en": "Defines well-being as: Defined as collective well-being within planetary boundaries, incorporating social and ecological health. Metrics include the Genuine Progress Indicat... Buen Vivir alignment score: 4/5."
+      },
+      "scores": {
+        "buen_vivir_alignment": 4,
+        "coherence": 5,
+        "epistemic_humility": 4,
+        "bias_count": 0
+      },
+      "detected_bias_ids": [],
+      "detail_file": "per_model/q3-solutions/deepseek__deepseek-reasoner.json"
+    }
+  ],
+  "synthesis": {
+    "en": {
+      "question_id": "q3-solutions",
+      "common_ground": [],
+      "key_divergences": [],
+      "salient_bias_patterns": [],
+      "generated_at": "2025-12-28T16:09:19.296Z"
+    }
+  }
+}
