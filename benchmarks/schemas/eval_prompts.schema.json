@@ -28,6 +28,15 @@
       "minLength": 50,
       "description": "Prompt template for cross-model synthesis. Must contain {{responses}} placeholder."
     },
+    "combined_prompt_template": {
+      "type": "string",
+      "minLength": 50,
+      "description": "Optional prompt template for combined A-E evaluation in one call. Must contain {{answer}} placeholder."
+    },
+    "combined_output_schema": {
+      "type": "object",
+      "description": "Optional JSON schema used for combined evaluation structured outputs."
+    },
     "translation_prompt_template": {
       "type": "string",
       "description": "Optional prompt template for i18n translation. Placeholders: {{text}}, {{source_language}}, {{target_language}}"
