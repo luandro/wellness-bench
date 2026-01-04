@@ -1,0 +1,46 @@
+{
+  "run_id": "run-20260104122159-7h6bmd",
+  "run_name": "Default Benchmark Run",
+  "run_description": "Standard benchmark run with all enabled questions and models",
+  "created_at": "2026-01-04T12:21:59.526Z",
+  "completed_at": "2026-01-04T12:26:18.093Z",
+  "git_sha": "e846b3472c4cd73968462739544d4a2374ff7352",
+  "languages_available": [
+    "en",
+    "pt-BR"
+  ],
+  "models_included": [
+    {
+      "provider_id": "openai",
+      "model_id": "gpt-5.2",
+      "display_name": "GPT-5.2",
+      "version": "2025-12-10"
+    }
+  ],
+  "question_ids": [
+    "q1-diagnosis"
+  ],
+  "file_map": {
+    "snapshots": {
+      "questions": "questions.snapshot.json",
+      "eval_prompts": "eval_prompts.snapshot.json",
+      "providers": "providers.snapshot.json"
+    },
+    "per_question": {
+      "q1-diagnosis": "per_question/q1-diagnosis.json"
+    },
+    "per_model": {
+      "q1-diagnosis": {
+        "openai__gpt-5.2": "per_model/q1-diagnosis/openai__gpt-5.2.json"
+      }
+    }
+  },
+  "stats": {
+    "total_questions": 1,
+    "total_models": 1,
+    "total_evaluations": 1,
+    "succeeded": 1,
+    "failed": 0,
+    "total_duration_ms": 60849
+  }
+}
