@@ -84,6 +84,9 @@ export class OpenRouterAdapter extends BaseProviderAdapter {
       temperature: request.temperature ?? 0.7,
       max_tokens: request.max_tokens ?? 4096,
     };
+    if (request.response_format) {
+      body.response_format = request.response_format;
+    }
 
     const startTime = Date.now();
 

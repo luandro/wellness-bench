@@ -45,14 +45,47 @@ export function getBackoffDelay(
  * Check if an error is retryable
  */
 export function isRetryableError(error: unknown): boolean {
+  const extractCode = (value: unknown): string | undefined => {
+    if (value && typeof value === 'object' && 'code' in value) {
+      const code = (value as { code?: unknown }).code;
+      if (typeof code === 'string') return code;
+    }
+    return undefined;
+  };
+
+  const isNetworkCode = (code?: string): boolean => {
+    if (!code) return false;
+    const normalized = code.toUpperCase();
+    return (
+      normalized === 'ETIMEDOUT' ||
+      normalized === 'ECONNRESET' ||
+      normalized === 'ECONNREFUSED' ||
+      normalized === 'ENOTFOUND' ||
+      normalized === 'EAI_AGAIN'
+    );
+  };
+
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
     // Rate limit errors
     if (message.includes('rate limit') || message.includes('429')) return true;
     // Temporary server errors
     if (message.includes('500') || message.includes('502') || message.includes('503') || message.includes('504')) return true;
-    // Network errors
+    // Network errors by message
     if (message.includes('econnreset') || message.includes('etimedout') || message.includes('network')) return true;
+
+    const directCode = extractCode(error);
+    if (isNetworkCode(directCode)) return true;
+
+    const cause = (error as { cause?: unknown }).cause;
+    if (cause instanceof Error) {
+      const causeMessage = cause.message.toLowerCase();
+      if (causeMessage.includes('econnreset') || causeMessage.includes('etimedout') || causeMessage.includes('network')) {
+        return true;
+      }
+    }
+    const causeCode = extractCode(cause);
+    if (isNetworkCode(causeCode)) return true;
   }
   return false;
 }
@@ -242,4 +275,3 @@ export abstract class BaseProviderAdapter implements ProviderAdapter {
     }
   }
 }
-
