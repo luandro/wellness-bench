@@ -1,10 +1,10 @@
 {
-  "run_id": "run-20260104122159-7h6bmd",
+  "run_id": "run-20260104125845-qxo4li",
   "run_name": "Default Benchmark Run",
   "run_description": "Standard benchmark run with all enabled questions and models",
-  "created_at": "2026-01-04T12:21:59.526Z",
-  "completed_at": "2026-01-04T12:26:18.093Z",
-  "git_sha": "e846b3472c4cd73968462739544d4a2374ff7352",
+  "created_at": "2026-01-04T12:58:45.674Z",
+  "completed_at": "2026-01-04T13:03:20.860Z",
+  "git_sha": "433911214ba2a4d22cfd035838ddb209b7f6a4e8",
   "languages_available": [
     "en",
     "pt-BR"
@@ -41,6 +41,6 @@
     "total_evaluations": 1,
     "succeeded": 1,
     "failed": 0,
-    "total_duration_ms": 60849
+    "total_duration_ms": 60114
   }
 }
