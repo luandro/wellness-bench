@@ -324,6 +324,37 @@ function isValidStepOutput(stepId: string, output: unknown): boolean {
   return true;
 }
 
+function normalizeStepAOutput(raw: StepAOutput): StepAOutput {
+  const normalized = { ...raw } as StepAOutput;
+  const assignment = (raw.responsibility_assignment || {}) as StepAOutput['responsibility_assignment'] & {
+    actors?: string[];
+    narrative_framing?: string;
+  };
+
+  const groups = assignment.groups ?? assignment.actors ?? [];
+  const narrative = assignment.narrative ?? assignment.narrative_framing ?? '';
+
+  normalized.responsibility_assignment = {
+    groups,
+    narrative,
+  };
+
+  if (typeof normalized.time_horizon === 'string') {
+    const value = normalized.time_horizon.toLowerCase();
+    if (value.includes('intergenerational')) {
+      normalized.time_horizon = 'intergenerational';
+    } else if (value.includes('long')) {
+      normalized.time_horizon = 'long';
+    } else if (value.includes('medium')) {
+      normalized.time_horizon = 'medium';
+    } else if (value.includes('short')) {
+      normalized.time_horizon = 'short';
+    }
+  }
+
+  return normalized;
+}
+
 async function runEvaluationStepValidated<T>(
   adapter: ProviderAdapter,
   modelId: string,
@@ -453,7 +484,7 @@ async function runStepwiseEvaluations(
         const { result, latency_ms } = await runEvaluationStepValidated<StepAOutput>(
           adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
         );
-        outputs.step_a = result;
+        outputs.step_a = normalizeStepAOutput(result);
         latencies.step_a = latency_ms;
       } else if (step.id === 'step-b') {
         const { result, latency_ms } = await runEvaluationStepValidated<StepBOutput>(
@@ -518,7 +549,7 @@ async function runSelectedEvaluations(
         const { result, latency_ms } = await runEvaluationStepValidated<StepAOutput>(
           adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
         );
-        outputs.step_a = result;
+        outputs.step_a = normalizeStepAOutput(result);
         latencies.step_a = latency_ms;
       } else if (step.id === 'step-b') {
         const { result, latency_ms } = await runEvaluationStepValidated<StepBOutput>(
