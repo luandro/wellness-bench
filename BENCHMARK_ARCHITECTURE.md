@@ -1,9 +1,9 @@
 ---
 title: Wellness-Bench Architecture Documentation
-version: 1.2.0
-last_updated: 2026-01-03
-verified_against_commit: aba6355
-next_review_date: 2025-03-31
+version: 1.2.1
+last_updated: 2026-01-04
+verified_against_commit: pending
+next_review_date: 2026-04-04
 ---
 
 # Wellness-Bench Architecture Documentation
@@ -265,8 +265,8 @@ Each model processes each question **independently and in parallel** (subject to
 ```
 For each question:
   For each model:
-    - Generate answer
-    - Run 5 evaluation steps
+    - Generate answer (with cross-run cache lookup)
+    - Run combined evaluation in one call (fallback to 5-step if needed)
     - Track metadata
 ```
 
@@ -275,6 +275,7 @@ For each question:
 - **Independent API calls** per model
 - **Parallel processing** with concurrency controls
 - **Individual retry logic** per request
+- **Content-addressed cache** for reusing identical generation/evaluation results across runs
 
 #### Stage 2: Synthesis Generation (Optional)
 
@@ -291,7 +292,7 @@ If synthesis is enabled and ≥2 models successfully answered a question:
 
 If translation is enabled:
 
-1. Translate syntheses to target languages
+1. Translate syntheses to target languages in batched JSON per question/language
 2. Rate-limited to prevent overwhelming APIs
 3. Graceful degradation (keeps original text on failure)
 
@@ -340,7 +341,19 @@ interface ProviderAdapter {
 - Rate limiting per provider
 - Token usage tracking
 
-### 2. Configuration Files
+### 2. Cache Layer
+
+**Location:** `benchmarks/cache/` (gitignored by default)
+
+**Purpose:** Avoid repeat API calls for identical generation/evaluation inputs across runs.
+
+**Key Behaviors:**
+- **Content-addressed keys** based on prompt/params/model/version + answer hash
+- **Local-only** reuse (cache hits are recorded in run metadata)
+- **Bypass on `--override`** to force re-evaluation
+- **Audit trail** via `cache_hits` and `cache_keys` in per-model metadata
+
+### 3. Configuration Files
 
 All configuration is centralized in JSON files:
 
@@ -383,6 +396,8 @@ Contains benchmark questions:
 Defines evaluation framework:
 - Answer wrapper prompt
 - Synthesis prompt template
+- Combined evaluation prompt template
+- Combined output JSON schema (for structured outputs)
 - Translation prompt template
 - Five evaluation step prompts
 - Bias taxonomy definitions
@@ -599,13 +614,15 @@ Each model answer undergoes comprehensive evaluation across five dimensions:
 **Process:**
 ```mermaid
 flowchart LR
-    Ans[Model Answer] --> A[Step A<br/>Decomposition]
-    Ans --> B[Step B<br/>Bias Detection]
-    Ans --> C[Step C<br/>Buen Vivir]
-    Ans --> D[Step D<br/>Coherence]
-    Ans --> E[Step E<br/>Humility]
+    Ans[Model Answer] --> Combined[Combined Evaluation<br/>Single JSON Call]
+    Combined --> Out[EvaluationOutputs]
+    Combined -.fallback.-> A[Step A<br/>Decomposition]
+    Combined -.fallback.-> B[Step B<br/>Bias Detection]
+    Combined -.fallback.-> C[Step C<br/>Buen Vivir]
+    Combined -.fallback.-> D[Step D<br/>Coherence]
+    Combined -.fallback.-> E[Step E<br/>Humility]
 
-    A --> Out[EvaluationOutputs]
+    A --> Out
     B --> Out
     C --> Out
     D --> Out
@@ -613,14 +630,20 @@ flowchart LR
 ```
 
 **Key Features:**
-- **Sequential execution** of steps (not parallel)
+- **Default combined evaluation** in a single call (reduces evaluator calls by ~5x)
+- **Schema-validated combined output** with strict, non-empty explanations for key fields
+- **Repair pass** re-evaluates from the original answer if combined output is incomplete
+- **Partial stepwise fill** for only the missing/empty steps after repair
+- **Full stepwise fallback** only if combined evaluation throws unrecoverable errors
+- **Sequential execution** for fallback steps (not parallel)
 - **Individual retry** per step on failure
+- **Structured JSON mode** when providers support response-format enforcement
 - **JSON repair** mechanism for malformed responses
 - **Partial completion** support (continues even if some steps fail)
 
 **JSON Repair Mechanism:**
 ```typescript
-// From pipeline.ts (runSingleEvaluation helper)
+// From pipeline.ts (requestJsonResponse helper)
 try {
   result = parseJsonResponse(response.content);
 } catch (parseError) {
@@ -706,9 +729,9 @@ try {
 - Per-question summaries
 
 **Translation Strategy:**
-1. **Array-based translation** - Translates each item in arrays separately
+1. **Batched per question/language** - Single JSON translation request per synthesis
 2. **Rate limiting** - 3 concurrent translations (configurable)
-3. **Graceful failure** - On translation failure, keeps original text
+3. **Fallback** - If JSON translation fails, falls back to per-item translation
 4. **Source language** - Defaults to English
 
 **Example:**
@@ -915,6 +938,8 @@ Each question has:
 Contains:
 - `answer_wrapper_prompt`: System prompt for answer generation
 - `synthesis_prompt`: Template for comparing model responses
+- `combined_prompt_template`: Combined A–E evaluation prompt
+- `combined_output_schema`: JSON schema for combined structured output
 - `translation_prompt_template`: Template for translations
 - `steps`: Array of 5 evaluation step prompts
 - `bias_taxonomy`: Definitions of bias types
@@ -2460,7 +2485,7 @@ System behavior when components fail: individual failures don't stop the pipelin
 **Progress Tracking States**
 - `pending`: Not yet started
 - `generating`: Creating model answer
-- `evaluating`: Running 5 evaluation steps
+- `evaluating`: Running combined evaluation (fallback to 5 steps if needed)
 - `translating`: Converting to target languages
 - `succeeded`: Completed successfully
 - `failed`: Encountered unrecoverable error
@@ -2473,7 +2498,7 @@ System behavior when components fail: individual failures don't stop the pipelin
 
 1. **Independent Model Execution** - Each model processes questions separately with no cross-communication during generation
 
-2. **Comprehensive Evaluation** - Five distinct evaluation dimensions (Decomposition, Bias, Buen Vivir, Coherence, Humility)
+2. **Comprehensive Evaluation** - Five distinct evaluation dimensions (Decomposition, Bias, Buen Vivir, Coherence, Humility) with single-call execution
 
 3. **Cross-Model Synthesis** - Comparative analysis identifies common ground and divergences
 
@@ -2484,6 +2509,7 @@ System behavior when components fail: individual failures don't stop the pipelin
 6. **Rich Output** - Multiple output formats (aggregated, detailed, per-language)
 
 7. **Multi-Language Support** - Translation to make results accessible globally
+8. **Cross-Run Reuse** - Content-addressed caching for identical generation/evaluation inputs
 
 ### Technical Highlights
 
@@ -2521,30 +2547,32 @@ While currently tightly coupled, the system could be refactored to allow:
 | `scripts/types.ts` | TypeScript type definitions | `RunPlan`, `PipelineItem`, `EvaluationOutputs`, `SynthesisResult` |
 | `scripts/config-loader.ts` | Configuration loading | Configuration file parsers and validators |
 | `scripts/skip-existing.ts` | Skip completed runs | Logic to avoid re-running completed evaluations |
+| `scripts/cache.ts` | Content-addressed cache | `hashObject()`, `readCache()`, `writeCache()` |
 | `providers/base.ts` | Provider interface | `ProviderAdapter` interface, `CompletionRequest/Response` types |
 | `providers/*.ts` | Provider implementations | OpenAI, Anthropic, Google, Grok, DeepSeek, OpenRouter adapters |
 | `config/run_config.json` | Run configuration | Benchmark run parameters and settings |
 | `config/providers.json` | Provider/model definitions | Available providers, models, and their configurations |
 | `config/questions.json` | Benchmark questions | Question text, metadata, domains, and tags |
-| `config/eval_prompts.json` | Evaluation prompts | System prompts for answer generation, evaluation steps, synthesis, translation |
+| `config/eval_prompts.json` | Evaluation prompts | System prompts for answer generation, combined evaluation, stepwise evaluation, synthesis, translation |
 
 ---
 
 ## Documentation Maintenance
 
-**Last Verified:** 2026-01-03 against commit `aba6355`
+**Last Verified:** pending (not yet verified after latest changes)
 
 **Version History:**
 
 | Version | Date | Changes | Verified Against |
 |---------|------|---------|------------------|
+| 1.2.1 | 2026-01-04 | Added combined evaluation path, cross-run cache, batched translation, and combined schema validation/repair | pending |
 | 1.2.0 | 2026-01-03 | Added Configuration Decision Guide section with decision trees, model selection guidance, and provider comparison tables | aba6355 |
 | 1.1.0 | 2025-12-31 | Added Performance & Cost Analysis section, added Development Workflow section | aba6355 |
 | 1.0.0 | 2024-12-30 | Maintainability improvements: replaced line numbers with function references, added version tracking | aba6355 |
 | 0.9.0 | 2024-12-29 | Initial comprehensive documentation | aba6355 |
 
 **Review Schedule:** Quarterly or after major version changes
-**Next Review:** 2025-03-31
+**Next Review:** 2026-04-04
 
 **Verification Process:**
 1. Validate code references against current codebase
