@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import { fetchResults } from '@/lib/basePath';
 import { toast } from '@/hooks/use-toast';
+import type { BiasCategoryKey } from '@/lib/bias';
 
 export interface BenchmarkRun {
   id: string;
@@ -44,12 +45,7 @@ export interface RunDetail {
   };
 }
 
-export interface BiasFilters {
-  market: boolean;
-  growth: boolean;
-  techno: boolean;
-  power: boolean;
-}
+export type BiasFilters = Record<BiasCategoryKey, boolean>;
 
 // ... mock data ...
 

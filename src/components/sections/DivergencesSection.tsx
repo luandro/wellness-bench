@@ -4,6 +4,7 @@ import { useBenchmark } from '@/contexts/BenchmarkContext';
 import { RandomUnderline } from '../ui/random-underline';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchResults } from '@/lib/basePath';
+import { mapBiasIdsToCategories } from '@/lib/bias';
 import type { PerQuestionResult, PerModelResult } from '@/types/benchmark';
 import {
   Tooltip,
@@ -96,14 +97,15 @@ export const DivergencesSection = () => {
         const key = `${m.provider_id}__${m.model_id}`;
         const detail = modelDetails[`${res.question_id}__${key}`];
         
-        const hasMarket = m.detected_bias_ids.includes('market');
-        const hasPower = m.detected_bias_ids.includes('power');
+        const biasCategories = mapBiasIdsToCategories(m.detected_bias_ids);
+        const hasMarket = biasCategories.includes('market');
+        const hasPower = biasCategories.includes('power');
         
         return {
           text: detail?.raw_answer.slice(0, 180) + '...' || 'No preview available',
           model: m.display_name.split(' (')[0],
           biasType: (hasMarket ? 'market' : hasPower ? 'systemic' : 'neutral') as 'neutral' | 'market' | 'systemic',
-          biasCategories: m.detected_bias_ids as any,
+          biasCategories,
         };
       });
 

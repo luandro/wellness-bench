@@ -14,6 +14,7 @@ import { ProviderLogo } from '@/components/ui/provider-logo';
 import { BiasIndicatorTooltip, ScoreTooltip } from '@/components/ui/bias-toggle';
 import { useBenchmark } from '@/contexts/BenchmarkContext';
 import { fetchResults } from '@/lib/basePath';
+import { mapBiasIdsToCategories } from '@/lib/bias';
 import type { PerModelResult } from '@/types/benchmark';
 
 interface BiasProfile {
@@ -167,6 +168,10 @@ export const ModelDeepDiveSection = () => {
 
   const currentModelData = models.find((m) => m.id === activeModelKey);
   const currentDetails = activeModelKey ? modelDetails[activeModelKey] : null;
+  const detectedBiasIds = currentDetails?.evaluations?.step_b?.detected_biases?.map((bias) => (
+    bias.id || bias.label || ''
+  )) || [];
+  const detectedBiasCategories = mapBiasIdsToCategories(detectedBiasIds);
 
   // Enhance model data with loaded details
   const displayModel = currentModelData ? {
@@ -178,10 +183,10 @@ export const ModelDeepDiveSection = () => {
       assessment: currentDetails?.evaluations?.step_c?.explanation || 'No assessment available',
     },
     biasProfile: [
-      { id: 'market', label: 'Market bias', level: (currentDetails?.evaluations?.step_b?.detected_biases?.some(b => b.id === 'market') ? 2 : 0) as 0|1|2 },
-      { id: 'growth', label: 'Growth normalization', level: (currentDetails?.evaluations?.step_b?.detected_biases?.some(b => b.id === 'growth') ? 2 : 0) as 0|1|2 },
-      { id: 'techno', label: 'Technosolutionism', level: (currentDetails?.evaluations?.step_b?.detected_biases?.some(b => b.id === 'techno') ? 2 : 0) as 0|1|2 },
-      { id: 'power', label: 'Power invisibility', level: (currentDetails?.evaluations?.step_b?.detected_biases?.some(b => b.id === 'power') ? 2 : 0) as 0|1|2 },
+      { id: 'market', label: 'Market bias', level: (detectedBiasCategories.includes('market') ? 2 : 0) as 0|1|2 },
+      { id: 'growth', label: 'Growth normalization', level: (detectedBiasCategories.includes('growth') ? 2 : 0) as 0|1|2 },
+      { id: 'techno', label: 'Technosolutionism', level: (detectedBiasCategories.includes('techno') ? 2 : 0) as 0|1|2 },
+      { id: 'power', label: 'Power invisibility', level: (detectedBiasCategories.includes('power') ? 2 : 0) as 0|1|2 },
     ],
     biasAnalysis: currentDetails?.evaluations?.step_b?.overall_bias_profile_summary,
     coherenceNotes: currentDetails?.evaluations?.step_d?.explanation,
