@@ -71,6 +71,8 @@ export interface EvalPromptsConfig {
   updated_at: string;
   answer_wrapper_prompt: string;
   synthesis_prompt: string;
+  combined_prompt_template?: string;
+  combined_output_schema?: Record<string, unknown>;
   translation_prompt_template?: string;
   steps: EvalStep[];
   bias_taxonomy: BiasDefinition[];
@@ -213,6 +215,14 @@ export interface CompletionRequest {
   messages: ChatMessage[];
   temperature?: number;
   max_tokens?: number;
+  response_format?: {
+    type: 'json_object' | 'json_schema';
+    json_schema?: {
+      name: string;
+      strict: boolean;
+      schema: Record<string, unknown>;
+    };
+  };
   retry_options?: {
     maxRetries?: number;
     baseDelayMs?: number;
@@ -300,6 +310,15 @@ export interface PipelineItem {
     generation_usage?: TokenUsage;
     evaluation_latencies?: Record<string, number>;
     translation_latencies?: Record<string, number>;
+    evaluation_mode?: 'combined' | 'combined-partial' | 'stepwise';
+    cache_hits?: {
+      generation?: boolean;
+      evaluation?: boolean;
+    };
+    cache_keys?: {
+      generation?: string;
+      evaluation?: string;
+    };
   };
 }
 
@@ -464,6 +483,15 @@ export interface PerModelResult {
     latency_ms: number;
     token_usage?: TokenUsage;
     evaluation_latencies?: Record<string, number>;
+    evaluation_mode?: 'combined' | 'combined-partial' | 'stepwise';
+    cache_hits?: {
+      generation?: boolean;
+      evaluation?: boolean;
+    };
+    cache_keys?: {
+      generation?: string;
+      evaluation?: string;
+    };
   };
 }
 

@@ -11,6 +11,7 @@ import type {
   SynthesisResult,
   ProviderAdapter,
   ChatMessage,
+  CompletionRequest,
   StepAOutput,
   StepBOutput,
   StepCOutput,
@@ -21,6 +22,7 @@ import type {
   TokenUsage,
 } from './types.js';
 import { parseJsonResponse } from '../providers/base.js';
+import { hashObject, hashString, readCache, writeCache } from './cache.js';
 
 interface PipelineContext {
   adapters: Map<string, ProviderAdapter>;
@@ -31,6 +33,10 @@ interface PipelineContext {
     baseDelayMs?: number;
     maxDelayMs?: number;
   };
+  cache?: {
+    enabled?: boolean;
+    dir?: string;
+  };
   onProgress?: (current: number, total: number, message: string) => void;
 }
 
@@ -38,6 +44,109 @@ interface GenerationResult {
   content: string;
   latency_ms: number;
   usage?: TokenUsage;
+}
+
+function supportsJsonMode(modelId: string): boolean {
+  const normalized = modelId.toLowerCase();
+  if (normalized.includes('gpt-5')) {
+    return false;
+  }
+  return (
+    normalized.includes('gpt-4o') ||
+    normalized.includes('gpt-4') ||
+    normalized.includes('gpt-3.5')
+  );
+}
+
+function supportsStructuredOutputs(modelId: string): boolean {
+  const normalized = modelId.toLowerCase();
+  if (normalized.includes('gpt-5')) {
+    return false;
+  }
+  if (normalized.includes('gpt-4o-mini')) {
+    return true;
+  }
+  return normalized.includes('gpt-4o-2024-08-06');
+}
+
+function getResponseFormat(
+  adapter: ProviderAdapter,
+  modelId: string,
+  jsonSchema?: Record<string, unknown>
+): CompletionRequest['response_format'] | undefined {
+  if (adapter.provider_id !== 'openai') {
+    if (adapter.provider_id === 'openrouter' && supportsJsonMode(modelId)) {
+      return { type: 'json_object' };
+    }
+    return undefined;
+  }
+
+  if (jsonSchema && supportsStructuredOutputs(modelId)) {
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name: 'evaluation_outputs',
+        strict: true,
+        schema: jsonSchema,
+      },
+    };
+  }
+
+  return supportsJsonMode(modelId) ? { type: 'json_object' } : undefined;
+}
+
+async function requestJsonResponse<T>(
+  adapter: ProviderAdapter,
+  modelId: string,
+  messages: ChatMessage[],
+  params: { temperature?: number; max_tokens?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  },
+  responseFormat?: CompletionRequest['response_format']
+): Promise<{ result: T; latency_ms: number }> {
+  const response = await adapter.complete({
+    model: modelId,
+    messages,
+    temperature: params.temperature ?? 0.3,
+    max_tokens: params.max_tokens ?? 2000,
+    response_format: responseFormat,
+    retry_options: retryOptions,
+  });
+
+  let result: T;
+  try {
+    result = parseJsonResponse(response.content) as T;
+  } catch (parseError) {
+    const repairMessages: ChatMessage[] = [
+      ...messages,
+      { role: 'assistant', content: response.content },
+      { role: 'user', content: 'The response was not valid JSON. Please respond with ONLY valid JSON matching the required schema, no additional text or markdown.' },
+    ];
+
+    const retryResponse = await adapter.complete({
+      model: modelId,
+      messages: repairMessages,
+      temperature: 0.1,
+      max_tokens: params.max_tokens ?? 2000,
+      response_format: responseFormat,
+      retry_options: retryOptions,
+    });
+
+    try {
+      result = parseJsonResponse(retryResponse.content) as T;
+    } catch (retryError) {
+      const originalMessage = parseError instanceof Error ? parseError.message : String(parseError);
+      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+      throw new Error(
+        `Failed to parse JSON after repair attempt. Original error: ${originalMessage}. Retry error: ${retryMessage}`
+      );
+    }
+  }
+
+  return { result, latency_ms: response.latency_ms };
 }
 
 /**
@@ -90,7 +199,8 @@ async function runEvaluationStep<T>(
     maxRetries?: number;
     baseDelayMs?: number;
     maxDelayMs?: number;
-  }
+  },
+  responseFormat?: CompletionRequest['response_format']
 ): Promise<{ result: T; latency_ms: number }> {
   const prompt = promptTemplate.replace('{{answer}}', answer);
 
@@ -98,46 +208,432 @@ async function runEvaluationStep<T>(
     { role: 'user', content: prompt },
   ];
 
-  const response = await adapter.complete({
-    model: modelId,
+  return requestJsonResponse(
+    adapter,
+    modelId,
     messages,
-    temperature: params.temperature ?? 0.3,
-    max_tokens: params.max_tokens ?? 2000,
-    retry_options: retryOptions,
-  });
+    params,
+    retryOptions,
+    responseFormat
+  );
+}
 
-  // Parse JSON response
-  let result: T;
-  try {
-    result = parseJsonResponse(response.content) as T;
-  } catch (parseError) {
-    // Retry with JSON repair instruction
-    const repairMessages: ChatMessage[] = [
-      ...messages,
-      { role: 'assistant', content: response.content },
-      { role: 'user', content: 'The response was not valid JSON. Please respond with ONLY valid JSON matching the required schema, no additional text or markdown.' },
-    ];
+function normalizeEvaluationOutputs(raw: Partial<EvaluationOutputs> & Record<string, unknown>): EvaluationOutputs {
+  return {
+    step_a: (raw.step_a ?? raw['step-a'] ?? null) as StepAOutput | null,
+    step_b: (raw.step_b ?? raw['step-b'] ?? null) as StepBOutput | null,
+    step_c: (raw.step_c ?? raw['step-c'] ?? null) as StepCOutput | null,
+    step_d: (raw.step_d ?? raw['step-d'] ?? null) as StepDOutput | null,
+    step_e: (raw.step_e ?? raw['step-e'] ?? null) as StepEOutput | null,
+  };
+}
 
-    const retryResponse = await adapter.complete({
-      model: modelId,
-      messages: repairMessages,
-      temperature: 0.1,
-      max_tokens: params.max_tokens ?? 2000,
-      retry_options: retryOptions,
-    });
+function hasAllEvaluationSteps(outputs: EvaluationOutputs): boolean {
+  return !!(outputs.step_a && outputs.step_b && outputs.step_c && outputs.step_d && outputs.step_e);
+}
 
-    try {
-      result = parseJsonResponse(retryResponse.content) as T;
-    } catch (retryError) {
-      const originalMessage = parseError instanceof Error ? parseError.message : String(parseError);
-      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
-      throw new Error(
-        `Failed to parse JSON after repair attempt. Original error: ${originalMessage}. Retry error: ${retryMessage}`
-      );
+function isNonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasMeaningfulCombinedOutputs(outputs: EvaluationOutputs): boolean {
+  if (!outputs.step_a || !outputs.step_b || !outputs.step_c || !outputs.step_d || !outputs.step_e) {
+    return false;
+  }
+
+  if (!isNonEmptyString(outputs.step_a.wellbeing_definition)) return false;
+  if (!isNonEmptyString(outputs.step_a.responsibility_assignment?.narrative)) return false;
+  if (!isNonEmptyString(outputs.step_b.overall_bias_profile_summary)) return false;
+  if (!isNonEmptyString(outputs.step_c.explanation)) return false;
+  if (!isNonEmptyString(outputs.step_d.explanation)) return false;
+  if (!isNonEmptyString(outputs.step_e.explanation)) return false;
+
+  if (outputs.step_b.detected_biases?.length) {
+    for (const bias of outputs.step_b.detected_biases) {
+      if (!isNonEmptyString(bias.id) || !isNonEmptyString(bias.label) || !isNonEmptyString(bias.explanation)) {
+        return false;
+      }
     }
   }
 
-  return { result, latency_ms: response.latency_ms };
+  return true;
+}
+
+const strictStepRequirements: Record<string, string[]> = {
+  'step-a': [
+    'wellbeing_definition must be a non-empty string.',
+    'responsibility_assignment.narrative must be a non-empty string.',
+  ],
+  'step-b': [
+    'overall_bias_profile_summary must be a non-empty string.',
+    'If no biases are detected, set detected_biases to [] and explain why in overall_bias_profile_summary.',
+    'For each detected bias, id, label, and explanation must be non-empty strings.',
+  ],
+  'step-c': [
+    'explanation must be a non-empty string.',
+  ],
+  'step-d': [
+    'explanation must be a non-empty string.',
+  ],
+  'step-e': [
+    'explanation must be a non-empty string.',
+  ],
+};
+
+function isValidStepOutput(stepId: string, output: unknown): boolean {
+  if (!output || typeof output !== 'object') {
+    return false;
+  }
+
+  if (stepId === 'step-a') {
+    const value = output as StepAOutput;
+    return isNonEmptyString(value.wellbeing_definition)
+      && isNonEmptyString(value.responsibility_assignment?.narrative);
+  }
+
+  if (stepId === 'step-b') {
+    const value = output as StepBOutput;
+    if (!isNonEmptyString(value.overall_bias_profile_summary)) {
+      return false;
+    }
+    if (value.detected_biases?.length) {
+      for (const bias of value.detected_biases) {
+        if (!isNonEmptyString(bias.id) || !isNonEmptyString(bias.label) || !isNonEmptyString(bias.explanation)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  if (stepId === 'step-c') {
+    const value = output as StepCOutput;
+    return isNonEmptyString(value.explanation);
+  }
+
+  if (stepId === 'step-d') {
+    const value = output as StepDOutput;
+    return isNonEmptyString(value.explanation);
+  }
+
+  if (stepId === 'step-e') {
+    const value = output as StepEOutput;
+    return isNonEmptyString(value.explanation);
+  }
+
+  return true;
+}
+
+async function runEvaluationStepValidated<T>(
+  adapter: ProviderAdapter,
+  modelId: string,
+  stepId: string,
+  promptTemplate: string,
+  answer: string,
+  params: { temperature?: number; max_tokens?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  },
+  responseFormat?: CompletionRequest['response_format']
+): Promise<{ result: T; latency_ms: number }> {
+  const first = await runEvaluationStep<T>(
+    adapter,
+    modelId,
+    promptTemplate,
+    answer,
+    params,
+    retryOptions,
+    responseFormat
+  );
+
+  if (isValidStepOutput(stepId, first.result)) {
+    return first;
+  }
+
+  const strictRules = strictStepRequirements[stepId];
+  if (!strictRules) {
+    return first;
+  }
+
+  const strictPrompt = [
+    promptTemplate,
+    '',
+    'Additional requirements:',
+    ...strictRules.map((rule) => `- ${rule}`),
+    '',
+    'Return ONLY valid JSON matching the schema. No additional text.',
+  ].join('\n');
+
+  return runEvaluationStep<T>(
+    adapter,
+    modelId,
+    strictPrompt,
+    answer,
+    { ...params, temperature: 0.1 },
+    retryOptions,
+    responseFormat
+  );
+}
+
+function listMissingSteps(outputs: EvaluationOutputs): string[] {
+  const missing: string[] = [];
+  if (!outputs.step_a) missing.push('step_a');
+  if (!outputs.step_b) missing.push('step_b');
+  if (!outputs.step_c) missing.push('step_c');
+  if (!outputs.step_d) missing.push('step_d');
+  if (!outputs.step_e) missing.push('step_e');
+  return missing;
+}
+
+function listIncompleteSteps(outputs: EvaluationOutputs): string[] {
+  const incomplete: string[] = [];
+
+  if (!outputs.step_a
+    || !isNonEmptyString(outputs.step_a.wellbeing_definition)
+    || !isNonEmptyString(outputs.step_a.responsibility_assignment?.narrative)
+    || !outputs.step_a.time_horizon) {
+    incomplete.push('step-a');
+  }
+
+  if (!outputs.step_b || !isNonEmptyString(outputs.step_b.overall_bias_profile_summary)) {
+    incomplete.push('step-b');
+  } else if (outputs.step_b.detected_biases?.length) {
+    for (const bias of outputs.step_b.detected_biases) {
+      if (!isNonEmptyString(bias.id)
+        || !isNonEmptyString(bias.label)
+        || !isNonEmptyString(bias.explanation)) {
+        incomplete.push('step-b');
+        break;
+      }
+    }
+  }
+
+  if (!outputs.step_c || !isNonEmptyString(outputs.step_c.explanation)) {
+    incomplete.push('step-c');
+  }
+
+  if (!outputs.step_d || !isNonEmptyString(outputs.step_d.explanation)) {
+    incomplete.push('step-d');
+  }
+
+  if (!outputs.step_e || !isNonEmptyString(outputs.step_e.explanation)) {
+    incomplete.push('step-e');
+  }
+
+  return Array.from(new Set(incomplete));
+}
+
+async function runStepwiseEvaluations(
+  adapter: ProviderAdapter,
+  modelId: string,
+  answer: string,
+  evalPrompts: EvalPromptsConfig,
+  params: { temperature?: number; max_tokens?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
+): Promise<{ outputs: EvaluationOutputs; latencies: Record<string, number>; mode: 'stepwise' }> {
+  const outputs: EvaluationOutputs = {
+    step_a: null,
+    step_b: null,
+    step_c: null,
+    step_d: null,
+    step_e: null,
+  };
+  const latencies: Record<string, number> = {};
+  const responseFormat = getResponseFormat(adapter, modelId);
+
+  for (const step of evalPrompts.steps) {
+    try {
+      if (step.id === 'step-a') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepAOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_a = result;
+        latencies.step_a = latency_ms;
+      } else if (step.id === 'step-b') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepBOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_b = result;
+        latencies.step_b = latency_ms;
+      } else if (step.id === 'step-c') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepCOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_c = result;
+        latencies.step_c = latency_ms;
+      } else if (step.id === 'step-d') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepDOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_d = result;
+        latencies.step_d = latency_ms;
+      } else if (step.id === 'step-e') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepEOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_e = result;
+        latencies.step_e = latency_ms;
+      } else {
+        console.warn(`Unknown evaluation step "${step.id}", skipping.`);
+      }
+    } catch (error) {
+      console.error(`Failed evaluation step ${step.id}:`, error);
+      // Continue with other steps
+    }
+  }
+
+  return { outputs, latencies, mode: 'stepwise' };
+}
+
+async function runSelectedEvaluations(
+  adapter: ProviderAdapter,
+  modelId: string,
+  answer: string,
+  evalPrompts: EvalPromptsConfig,
+  params: { temperature?: number; max_tokens?: number },
+  stepsToRun: string[],
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
+): Promise<{ outputs: Partial<EvaluationOutputs>; latencies: Record<string, number> }> {
+  const outputs: Partial<EvaluationOutputs> = {};
+  const latencies: Record<string, number> = {};
+  const responseFormat = getResponseFormat(adapter, modelId);
+
+  for (const step of evalPrompts.steps) {
+    if (!stepsToRun.includes(step.id)) {
+      continue;
+    }
+
+    try {
+      if (step.id === 'step-a') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepAOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_a = result;
+        latencies.step_a = latency_ms;
+      } else if (step.id === 'step-b') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepBOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_b = result;
+        latencies.step_b = latency_ms;
+      } else if (step.id === 'step-c') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepCOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_c = result;
+        latencies.step_c = latency_ms;
+      } else if (step.id === 'step-d') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepDOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_d = result;
+        latencies.step_d = latency_ms;
+      } else if (step.id === 'step-e') {
+        const { result, latency_ms } = await runEvaluationStepValidated<StepEOutput>(
+          adapter, modelId, step.id, step.prompt_template, answer, params, retryOptions, responseFormat
+        );
+        outputs.step_e = result;
+        latencies.step_e = latency_ms;
+      }
+    } catch (error) {
+      console.error(`Failed selected evaluation step ${step.id}:`, error);
+    }
+  }
+
+  return { outputs, latencies };
+}
+
+async function runCombinedEvaluations(
+  adapter: ProviderAdapter,
+  modelId: string,
+  answer: string,
+  evalPrompts: EvalPromptsConfig,
+  params: { temperature?: number; max_tokens?: number },
+  retryOptions?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  }
+): Promise<{
+  outputs: EvaluationOutputs;
+  latencies: Record<string, number>;
+  mode: 'combined';
+  incompleteSteps: string[];
+}> {
+  if (!evalPrompts.combined_prompt_template) {
+    throw new Error('Combined evaluation prompt template not configured.');
+  }
+
+  const prompt = evalPrompts.combined_prompt_template.replace('{{answer}}', answer);
+  const messages: ChatMessage[] = [
+    { role: 'user', content: prompt },
+  ];
+  const responseFormat = getResponseFormat(adapter, modelId, evalPrompts.combined_output_schema);
+
+  const { result, latency_ms } = await requestJsonResponse<EvaluationOutputs>(
+    adapter,
+    modelId,
+    messages,
+    params,
+    retryOptions,
+    responseFormat
+  );
+
+  let outputs = normalizeEvaluationOutputs(result as EvaluationOutputs);
+  if (!hasAllEvaluationSteps(outputs) || !hasMeaningfulCombinedOutputs(outputs)) {
+    const missing = listMissingSteps(outputs);
+    const repairPrompt = [
+      'The previous JSON output is incomplete or contains empty required fields.',
+      missing.length > 0 ? `Missing keys: ${missing.join(', ')}.` : 'Some required fields are empty.',
+      'Re-evaluate the answer and return a complete JSON object with all required keys and non-empty explanations.',
+      'Do not use empty strings for required narrative/explanation fields.',
+      'If no biases are detected, set detected_biases to [] but provide a non-empty overall_bias_profile_summary explaining that.',
+      'Use the original answer below when re-evaluating.',
+      'Answer to evaluate:',
+      answer,
+      'Here is the previous JSON output (for reference only):',
+      JSON.stringify(result),
+    ].join('\n');
+
+    const repairMessages: ChatMessage[] = [
+      { role: 'user', content: repairPrompt },
+    ];
+
+    const { result: repaired, latency_ms: repairLatency } = await requestJsonResponse<EvaluationOutputs>(
+      adapter,
+      modelId,
+      repairMessages,
+      { temperature: 0.1, max_tokens: params.max_tokens ?? 2000 },
+      retryOptions,
+      responseFormat
+    );
+
+    outputs = normalizeEvaluationOutputs(repaired as EvaluationOutputs);
+    const incomplete = listIncompleteSteps(outputs);
+    return {
+      outputs,
+      latencies: { combined: latency_ms, combined_repair: repairLatency },
+      mode: 'combined',
+      incompleteSteps: incomplete,
+    };
+  }
+
+  return {
+    outputs,
+    latencies: { combined: latency_ms },
+    mode: 'combined',
+    incompleteSteps: [],
+  };
 }
 
 /**
@@ -154,58 +650,55 @@ async function runAllEvaluations(
     baseDelayMs?: number;
     maxDelayMs?: number;
   }
-): Promise<{ outputs: EvaluationOutputs; latencies: Record<string, number> }> {
-  const outputs: EvaluationOutputs = {
-    step_a: null,
-    step_b: null,
-    step_c: null,
-    step_d: null,
-    step_e: null,
-  };
-  const latencies: Record<string, number> = {};
-
-  for (const step of evalPrompts.steps) {
+): Promise<{ outputs: EvaluationOutputs; latencies: Record<string, number>; mode: 'combined' | 'combined-partial' | 'stepwise' }> {
+  if (evalPrompts.combined_prompt_template) {
     try {
-      if (step.id === 'step-a') {
-        const { result, latency_ms } = await runEvaluationStep<StepAOutput>(
-          adapter, modelId, step.prompt_template, answer, params, retryOptions
-        );
-        outputs.step_a = result;
-        latencies.step_a = latency_ms;
-      } else if (step.id === 'step-b') {
-        const { result, latency_ms } = await runEvaluationStep<StepBOutput>(
-          adapter, modelId, step.prompt_template, answer, params, retryOptions
-        );
-        outputs.step_b = result;
-        latencies.step_b = latency_ms;
-      } else if (step.id === 'step-c') {
-        const { result, latency_ms } = await runEvaluationStep<StepCOutput>(
-          adapter, modelId, step.prompt_template, answer, params, retryOptions
-        );
-        outputs.step_c = result;
-        latencies.step_c = latency_ms;
-      } else if (step.id === 'step-d') {
-        const { result, latency_ms } = await runEvaluationStep<StepDOutput>(
-          adapter, modelId, step.prompt_template, answer, params, retryOptions
-        );
-        outputs.step_d = result;
-        latencies.step_d = latency_ms;
-      } else if (step.id === 'step-e') {
-        const { result, latency_ms } = await runEvaluationStep<StepEOutput>(
-          adapter, modelId, step.prompt_template, answer, params, retryOptions
-        );
-        outputs.step_e = result;
-        latencies.step_e = latency_ms;
-      } else {
-        console.warn(`Unknown evaluation step "${step.id}", skipping.`);
+      const combinedResult = await runCombinedEvaluations(
+        adapter,
+        modelId,
+        answer,
+        evalPrompts,
+        params,
+        retryOptions
+      );
+      if (combinedResult.incompleteSteps.length === 0) {
+        return combinedResult;
       }
+
+      const selected = await runSelectedEvaluations(
+        adapter,
+        modelId,
+        answer,
+        evalPrompts,
+        params,
+        combinedResult.incompleteSteps,
+        retryOptions
+      );
+
+      return {
+        outputs: {
+          step_a: selected.outputs.step_a ?? combinedResult.outputs.step_a,
+          step_b: selected.outputs.step_b ?? combinedResult.outputs.step_b,
+          step_c: selected.outputs.step_c ?? combinedResult.outputs.step_c,
+          step_d: selected.outputs.step_d ?? combinedResult.outputs.step_d,
+          step_e: selected.outputs.step_e ?? combinedResult.outputs.step_e,
+        },
+        latencies: { ...combinedResult.latencies, ...selected.latencies },
+        mode: 'combined-partial',
+      };
     } catch (error) {
-      console.error(`Failed evaluation step ${step.id}:`, error);
-      // Continue with other steps
+      console.warn('Combined evaluation failed; falling back to stepwise evaluation.', error);
     }
   }
 
-  return { outputs, latencies };
+  return runStepwiseEvaluations(
+    adapter,
+    modelId,
+    answer,
+    evalPrompts,
+    params,
+    retryOptions
+  );
 }
 
 /**
@@ -313,6 +806,25 @@ export async function runPipeline(
     temperature: plan.evaluation_params?.temperature ?? 0.3,
     max_tokens: plan.evaluation_params?.max_tokens ?? 2000,
   };
+  const cacheEnabled = context.cache?.enabled ?? false;
+  const cacheDir = context.cache?.dir ?? '';
+  const evaluationSignature = hashObject({
+    combined_prompt_template: evalPrompts.combined_prompt_template ?? null,
+    combined_output_schema: evalPrompts.combined_output_schema ?? null,
+    steps: evalPrompts.steps.map((step) => ({
+      id: step.id,
+      prompt_template: step.prompt_template,
+      output_schema: step.output_schema,
+    })),
+  });
+  const answerPromptSignature = hashObject({
+    answer_wrapper_prompt: evalPrompts.answer_wrapper_prompt,
+  });
+
+  const modelVersionLookup = new Map<string, string | undefined>();
+  for (const model of plan.models) {
+    modelVersionLookup.set(`${model.provider_id}::${model.model_id}`, model.model_version);
+  }
 
   // Create rate limiters
   const globalLimit = pLimit(concurrency.max_concurrent_requests || 3);
@@ -360,20 +872,55 @@ export async function runPipeline(
             item.status = 'generating';
             context.onProgress?.(completed, total, `Generating: ${model.model_display_name} for ${question.id}`);
 
-            const genResult = await generateAnswer(
-              adapter,
-              model.model_id,
-              question.text,
-              evalPrompts.answer_wrapper_prompt,
-              model.params,
-              retryOptions
-            );
+            const systemPrompt = evalPrompts.answer_wrapper_prompt.replace('{{question}}', question.text);
+            const generationCacheKey = hashObject({
+              type: 'generation',
+              provider_id: model.provider_id,
+              model_id: model.model_id,
+              model_version: model.model_version ?? null,
+              question_id: question.id,
+              question_text: question.text,
+              system_prompt: systemPrompt,
+              answer_prompt_signature: answerPromptSignature,
+              params: model.params,
+            });
+
+            let genResult: GenerationResult | null = null;
+            if (cacheEnabled && cacheDir) {
+              genResult = await readCache<GenerationResult>(cacheDir, 'answers', generationCacheKey);
+            }
+            const generationCacheHit = !!genResult;
+
+            if (!genResult) {
+              genResult = await generateAnswer(
+                adapter,
+                model.model_id,
+                question.text,
+                evalPrompts.answer_wrapper_prompt,
+                model.params,
+                retryOptions
+              );
+
+              if (cacheEnabled && cacheDir) {
+                await writeCache(cacheDir, 'answers', generationCacheKey, genResult);
+              }
+            }
+
+            if (!genResult) {
+              throw new Error('Generation result missing after execution.');
+            }
 
             item.raw_answer = genResult.content;
             item.metadata = {
               generation_timestamp: new Date().toISOString(),
               generation_latency_ms: genResult.latency_ms,
               generation_usage: genResult.usage,
+              cache_hits: {
+                generation: generationCacheHit,
+              },
+              cache_keys: {
+                generation: generationCacheKey,
+              },
             };
 
             // Step 2: Run evaluations
@@ -387,21 +934,58 @@ export async function runPipeline(
               throw new Error(`No adapter for evaluation provider: ${evaluatorProviderId}`);
             }
 
-            const runEvaluations = () =>
-              runAllEvaluations(
-                evaluatorAdapter,
-                evaluatorModelId,
-                item.raw_answer,
-                evalPrompts,
-                evaluationParams,
-                retryOptions
-              );
-            const evalResult = evaluatorProviderId === model.provider_id
-              ? await runEvaluations()
-              : await (providerLimits.get(evaluatorProviderId) ?? providerLimit)(runEvaluations);
+            const answerHash = hashString(item.raw_answer);
+            const evaluatorModelVersion = modelVersionLookup.get(`${evaluatorProviderId}::${evaluatorModelId}`);
+            const evaluationCacheKey = hashObject({
+              type: 'evaluation',
+              evaluator_provider_id: evaluatorProviderId,
+              evaluator_model_id: evaluatorModelId,
+              evaluator_model_version: evaluatorModelVersion ?? null,
+              answer_hash: answerHash,
+              evaluation_signature: evaluationSignature,
+              evaluation_params: evaluationParams,
+            });
+
+            let evalResult: { outputs: EvaluationOutputs; latencies: Record<string, number>; mode: 'combined' | 'stepwise' } | null = null;
+            if (cacheEnabled && cacheDir) {
+              evalResult = await readCache(cacheDir, 'evaluations', evaluationCacheKey);
+            }
+            const evaluationCacheHit = !!evalResult;
+
+            if (!evalResult) {
+              const runEvaluations = () =>
+                runAllEvaluations(
+                  evaluatorAdapter,
+                  evaluatorModelId,
+                  item.raw_answer,
+                  evalPrompts,
+                  evaluationParams,
+                  retryOptions
+                );
+              evalResult = evaluatorProviderId === model.provider_id
+                ? await runEvaluations()
+                : await (providerLimits.get(evaluatorProviderId) ?? providerLimit)(runEvaluations);
+
+              if (cacheEnabled && cacheDir) {
+                await writeCache(cacheDir, 'evaluations', evaluationCacheKey, evalResult);
+              }
+            }
+
+            if (!evalResult) {
+              throw new Error('Evaluation result missing after execution.');
+            }
 
             item.evaluations = evalResult.outputs;
             item.metadata.evaluation_latencies = evalResult.latencies;
+            item.metadata.evaluation_mode = evalResult.mode;
+            item.metadata.cache_hits = {
+              ...item.metadata.cache_hits,
+              evaluation: evaluationCacheHit,
+            };
+            item.metadata.cache_keys = {
+              ...item.metadata.cache_keys,
+              evaluation: evaluationCacheKey,
+            };
 
             item.status = 'succeeded';
           } catch (error) {
@@ -504,11 +1088,58 @@ export async function translateResults(
   const translationLimit = pLimit(validatedConcurrency);
 
   /**
-   * Helper to translate an array of texts with rate limiting
-   * Uses Promise.allSettled for partial failure handling - failed translations
-   * are replaced with original text and logged
+   * Helper to translate a synthesis object in one request.
    */
-  async function translateArray(texts: string[], targetLang: string): Promise<string[]> {
+  async function translateSynthesisBatch(
+    synthesis: SynthesisResult,
+    targetLang: string
+  ): Promise<SynthesisResult> {
+    const payload = {
+      common_ground: synthesis.common_ground || [],
+      key_divergences: synthesis.key_divergences || [],
+      salient_bias_patterns: synthesis.salient_bias_patterns || [],
+    };
+
+    const prompt = translationTemplate
+      .replace('{{text}}', JSON.stringify(payload))
+      .replace('{{source_language}}', sourceLanguage)
+      .replace('{{target_language}}', targetLang);
+
+    const messages: ChatMessage[] = [
+      { role: 'user', content: prompt },
+    ];
+
+  const responseFormat = getResponseFormat(adapter, modelId);
+    const { result } = await requestJsonResponse<{
+      common_ground: string[];
+      key_divergences: string[];
+      salient_bias_patterns: string[];
+    }>(
+      adapter,
+      modelId,
+      messages,
+      { temperature, max_tokens: 4096 },
+      retryOptions,
+      responseFormat
+    );
+
+    if (!Array.isArray(result.common_ground)
+      || !Array.isArray(result.key_divergences)
+      || !Array.isArray(result.salient_bias_patterns)) {
+      throw new Error('Translated synthesis payload missing required arrays.');
+    }
+
+    return {
+      question_id: synthesis.question_id,
+      language: targetLang,
+      common_ground: result.common_ground,
+      key_divergences: result.key_divergences,
+      salient_bias_patterns: result.salient_bias_patterns,
+      generated_at: new Date().toISOString(),
+    };
+  }
+
+  async function translateArrayFallback(texts: string[], targetLang: string): Promise<string[]> {
     const tasks = texts.map((text) =>
       translationLimit(() =>
         translateText(
@@ -529,13 +1160,12 @@ export async function translateResults(
     return results.map((result, index) => {
       if (result.status === 'fulfilled') {
         return result.value;
-      } else {
-        // Log failure but continue with original text
-        console.warn(
-          `Translation failed for item ${index + 1} to ${targetLang}: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}`
-        );
-        return texts[index]; // Fallback to original text
       }
+
+      console.warn(
+        `Translation failed for item ${index + 1} to ${targetLang}: ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}`
+      );
+      return texts[index];
     });
   }
 
@@ -545,32 +1175,41 @@ export async function translateResults(
       if (targetLang === sourceLanguage) continue;
 
       try {
-        // Translate each array field with rate limiting
-        const translatedCommonGround = await translateArray(
-          synthesis.common_ground || [],
-          targetLang
+        const translated = await translationLimit(() =>
+          translateSynthesisBatch(synthesis, targetLang)
         );
-
-        const translatedDivergences = await translateArray(
-          synthesis.key_divergences || [],
-          targetLang
-        );
-
-        const translatedPatterns = await translateArray(
-          synthesis.salient_bias_patterns || [],
-          targetLang
-        );
-
-        translatedSyntheses.push({
-          question_id: synthesis.question_id,
-          language: targetLang,
-          common_ground: translatedCommonGround,
-          key_divergences: translatedDivergences,
-          salient_bias_patterns: translatedPatterns,
-          generated_at: new Date().toISOString(),
-        });
+        translatedSyntheses.push(translated);
       } catch (error) {
-        console.error(`Failed translation for ${synthesis.question_id} to ${targetLang}:`, error);
+        console.error(`Failed batched translation for ${synthesis.question_id} to ${targetLang}:`, error);
+
+        try {
+          const translatedCommonGround = await translateArrayFallback(
+            synthesis.common_ground || [],
+            targetLang
+          );
+          const translatedDivergences = await translateArrayFallback(
+            synthesis.key_divergences || [],
+            targetLang
+          );
+          const translatedPatterns = await translateArrayFallback(
+            synthesis.salient_bias_patterns || [],
+            targetLang
+          );
+
+          translatedSyntheses.push({
+            question_id: synthesis.question_id,
+            language: targetLang,
+            common_ground: translatedCommonGround,
+            key_divergences: translatedDivergences,
+            salient_bias_patterns: translatedPatterns,
+            generated_at: new Date().toISOString(),
+          });
+        } catch (fallbackError) {
+          console.error(
+            `Failed fallback translation for ${synthesis.question_id} to ${targetLang}:`,
+            fallbackError
+          );
+        }
       }
     }
   }

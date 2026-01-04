@@ -327,11 +327,16 @@ async function main(): Promise<void> {
       return Object.keys(retrySettings).length > 0 ? retrySettings : undefined;
     })();
 
+    const cacheDir = resolve(rootDir, 'benchmarks/cache');
     const { items, syntheses } = await runPipeline(plan, {
       adapters,
       evalPrompts: configs.evalPrompts,
       concurrency: configs.runConfig.concurrency || {},
       retryOptions,
+      cache: {
+        enabled: !options.override,
+        dir: cacheDir,
+      },
       onProgress: progressLogger,
     });
 

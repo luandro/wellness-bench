@@ -15,6 +15,7 @@ dist-ssr
 # Benchmark output (keep docs)
 benchmarks/results/*
 !benchmarks/results/README.md
+benchmarks/cache/*
 
 # Test artifacts
 test-results

@@ -343,6 +343,9 @@ export async function generateOutputBundle(
           latency_ms: item.metadata?.generation_latency_ms || 0,
           token_usage: item.metadata?.generation_usage,
           evaluation_latencies: item.metadata?.evaluation_latencies,
+          evaluation_mode: item.metadata?.evaluation_mode,
+          cache_hits: item.metadata?.cache_hits,
+          cache_keys: item.metadata?.cache_keys,
         },
       };
 
